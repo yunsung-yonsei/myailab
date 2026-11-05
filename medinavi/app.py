@@ -8,12 +8,12 @@ import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 
 BASE_DIR = Path(__file__).resolve().parent
-FRONTEND_DIR = BASE_DIR / "frontend"
-DATA_PATH = BASE_DIR / "data" / "hospitals.json"
+# 파일을 medinavi 바로 아래에 모았다. 기존 변수명과 조회 기능은 유지한다.
+FRONTEND_DIR = BASE_DIR
+DATA_PATH = BASE_DIR / "hospitals.json"
 
 load_dotenv(BASE_DIR / ".env", encoding="utf-8-sig")
 
@@ -25,9 +25,14 @@ if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
 
 app = FastAPI()
 
-# frontend 폴더의 javascript 등의 파일 제공
+# 화면에 필요한 두 파일만 제공한다. 폴더 전체를 공개하면 .env도 노출될 수 있다.
+PUBLIC_FILES = {"map.js", "hospital-route-view.js"}
 
-app.mount("/static", StaticFiles(directory = str(FRONTEND_DIR)), name = "static",)
+@app.get("/static/{file_name}")
+def get_public_file(file_name: str):
+    if file_name not in PUBLIC_FILES:
+        raise HTTPException(status_code=404, detail="파일을 찾지 못했습니다.")
+    return FileResponse(FRONTEND_DIR / file_name, media_type="text/javascript")
 
 @app.get("/")
 def home():
