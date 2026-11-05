@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>메디네비 | 강원 응급의료기관</title>
+<style>
+* { box-sizing:border-box }
+body { margin:0; background:#f4f8f7; color:#173d39; font:16px/1.5 system-ui,sans-serif }
+main { max-width:1000px; margin:auto; padding:16px }
+header { color:#126c60; font-weight:bold }
+h1 { font-size:clamp(23px,4vw,34px); margin:8px 0 }
+/* 모바일 주소창 높이가 바뀌어도 화면에 맞춰 지도 높이를 조절한다. */
+#map { width:100%; height:60vh; height:clamp(180px,60dvh,640px); border-radius:12px; background:#e1ece8 }
+nav { display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 }
+button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #508277; border-radius:8px; background:white; color:#173d39; font:inherit; cursor:pointer }
+#hospital-detail { background:white; border:1px solid #508277; border-radius:12px; padding:16px; margin-block:16px }
+#detail-fields dt { font-weight:bold; margin-top:10px }
+#detail-fields dd { margin:0; overflow-wrap:anywhere }
+#hospital-list { list-style:none; padding:0 }
+#hospital-list button { width:100%; text-align:left; margin-bottom:4px }
+.map-shell {position: relative;}
+.map-shell #map {isolation: isolate;}
+#my-location {position: absolute; right: 12px; bottom: 36px; z-index: 1;}
+.my-location-dot {display: block; width: 18px; height: 18px; border: 3px solid white; border-radius: 50%; background: #d62828; box-shadow: 0 0 0 2px #d62828;}
+#my-location-status:empty {display: none;}
+</style>
+<main><header>길라잡이 · 메디네비</header>
+    <h1>강원 응급의료기관 지도</h1>
+<p id="status" role="status">기관 정보를 읽고 있어요.</p>
+<div class="map-shell">
+  <div id="map" aria-label="강원특별자치도 응급의료기관 지도"></div>
+  <button id="my-location" type="button" disabled>내 위치</button>
+</div>
+<p id="my-location-status" role="status"></p>
+<nav aria-label="지도 조작"><button id="all" disabled>전체 보기</button><button id="plus" disabled>확대</button><button id="minus" disabled>축소</button></nav>
+<section id="hospital-detail" hidden aria-labelledby="detail-title">
+<h2 id="detail-title" tabindex="-1">병원 상세정보</h2>
+<dl id="detail-fields"></dl>
+<p id="route-info" role-"status"></p>
+</section>
+<section><h2>의료기관 목록</h2><ul id="hospital-list"></ul></section></main>
+<script src="/static/map.js?v=5"></script>
+<!-- 웹 지도용 공개 Client ID만 사용한다. -->
+<script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=qbtbo9ux4q" onload="showMap()" onerror="mapError()"></script>
+</html>
