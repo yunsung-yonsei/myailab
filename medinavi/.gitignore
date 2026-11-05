@@ -9,3 +9,6 @@ server.ipynb
 
 data/*
 !data/hospitals.json
+
+# 실행 로그에는 위치 조회 주소가 포함될 수 있으므로 공유하지 않는다.
+*.log
