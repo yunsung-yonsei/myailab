@@ -35,10 +35,12 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 <section id="hospital-detail" hidden aria-labelledby="detail-title">
 <h2 id="detail-title" tabindex="-1">병원 상세정보</h2>
 <dl id="detail-fields"></dl>
-<p id="route-info" role-"status"></p>
+<p id="route-info" role="status"></p>
 </section>
 <section><h2>의료기관 목록</h2><ul id="hospital-list"></ul></section></main>
-<script src="/static/map.js?v=5"></script>
+<script src="/static/map.js?v=6"></script>
+<!-- 추가: 병원 강조·내 위치·자동 경로 표시 기능 -->
+<script src="/static/hospital-route-view.js?v=1"></script>
 <!-- 웹 지도용 공개 Client ID만 사용한다. -->
 <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=qbtbo9ux4q" onload="showMap()" onerror="mapError()"></script>
 </html>
