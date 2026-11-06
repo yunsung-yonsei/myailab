@@ -1,0 +1,5 @@
+# Tested versions for update_v1; original requirements.txt is unchanged.
+fastapi==0.162.0
+uvicorn==0.54.0
+httpx==0.28.1
+python-dotenv==1.2.4
