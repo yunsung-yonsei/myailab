@@ -4,14 +4,14 @@
 
 ## 1. 이 버전 받기
 
-GitHub에서 `medinavi-location-and-routes` 브랜치를 선택한 뒤 **Code → Download ZIP**으로 전체를 받습니다. Git을 사용한다면 기존 작업 폴더 밖에서 다음 명령을 실행합니다.
+GitHub의 기본 `main` 브랜치에서 **Code → Download ZIP**으로 전체를 받습니다. Git을 사용한다면 기존 작업 폴더 밖에서 다음 명령을 실행합니다.
 
 ```powershell
-git clone --branch medinavi-location-and-routes https://github.com/yunsung-yonsei/myailab.git medinavi-update-v1
+git clone https://github.com/yunsung-yonsei/myailab.git medinavi-update-v1
 cd medinavi-update-v1/medinavi
 ```
 
-기본 `main`에는 이 추가 기능이 아직 병합되지 않았습니다. 위 브랜치의 파일을 받아야 합니다.
+추가 기능도 기본 `main`에서 받을 수 있습니다. `medinavi` 폴더에서 이름에 `update_v1`이 붙은 파일로 실행합니다.
 
 ## 2. 필요한 파일
 
