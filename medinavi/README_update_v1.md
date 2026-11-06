@@ -99,7 +99,7 @@ Python이 설치된 PC에서 `medinavi` 폴더를 VS Code로 열고 터미널을
 ## 7. 백업과 검증 범위
 
 - 팀장님 원본은 기본 `main`과 복구된 원본 폴더에 보존합니다.
-- 이번 복구 직전 작업본은 [backup-before-update-v1 브랜치](https://github.com/yunsung-yonsei/myailab/tree/backup-before-update-v1/medinavi)에 별도로 보존했습니다.
+- 복구 직전 작업본은 [보존된 작업 기록](https://github.com/yunsung-yonsei/myailab/tree/486199faecfb9b143a09759efaef58cbcadc48fc/medinavi)에서 확인할 수 있습니다. 별도 작업·백업 브랜치는 정리했으며 변경 기록은 `main`에 보존됩니다.
 - 실제 `.env`·로그·가상환경은 업로드·백업 대상에서 제외했습니다. 빈 양식만 제공합니다.
 - 파일 이름과 참조 경로, 병원 23개 JSON, 화면·정적 파일·병원 API, 비공개 파일 접근 차단을 검사합니다. 길찾기 응답 처리는 실제 인증정보를 열람하지 않고 모의 응답으로 검사합니다.
 - 팀장님 PC에서의 실제 네이버 지도·길찾기·현재 위치 성공 여부는 4번 외부 설정과 권한까지 맞춘 후 확인해야 합니다.
