@@ -63,6 +63,8 @@ async function showHospitalRoute(hospital) {
   ) {
     throw new Error("거리 또는 시간 정보가 올바르지 않습니다.");
   }
+  // 추가: 이미 조회한 도로 좌표로 경로를 자동 표시한다.
+  window.hospitalRouteView?.draw(hospital, result);
   const distanceKm = (distance_m / 1000).toFixed(1);
   const minutes = Math.ceil(duration_ms / 60000);
   routeInfo.textContent = `내 위치 기준 · 자동차 이동거리 ${distanceKm}km · 예상 ${minutes}분`;
@@ -80,6 +82,8 @@ async function showHospitalRoute(hospital) {
 
 // 핀과 목록 버튼이 같은 상세정보 영역을 사용한다.
 function showHospitalDetail(hospital, data) {
+  // 추가: 선택 병원 강조와 이전 경로 정리.
+  window.hospitalRouteView?.select(hospital);
   const detail = document.querySelector("#hospital-detail");
   const fields = document.querySelector("#detail-fields");
   const lookupTime = new Date(data.retrieved_at || "");
@@ -127,6 +131,8 @@ function setupMyLocation(map) {
     message.textContent = "내 위치를 확인하고 있어요.";
     routeRequest?.abort();
     currentLocation = null;
+    // 추가: 출발지 재조회 중에는 이전 경로를 제거한다.
+    window.hospitalRouteView?.locationReset();
     routeInfo.textContent = "위치를 확인한 뒤 병원을 선택해 주세요.";
     navigator.geolocation.getCurrentPosition(
       ({coords}) => {
@@ -151,6 +157,8 @@ function setupMyLocation(map) {
       }
       map.setCenter(position);
       map.setZoom(Math.max(map.getZoom(), 15));
+      // 추가: 위치를 나중에 확인한 경우에도 선택 병원의 경로를 조회한다.
+      window.hospitalRouteView?.locationReady(MyLocationMarker);
       message.textContent = "지도에 내 위치를 표시했어요.";
       button.disabled = false;
       },
@@ -210,6 +218,8 @@ async function showMap() {
       }
       const position = new naver.maps.LatLng(latitude, longitude);
       const marker = new naver.maps.Marker({map, position, title: hospital.dutyName});
+      // 추가: 원본 병원 핀을 별도 기능 파일에 전달한다.
+      window.hospitalRouteView?.register(map, hospital, marker);
       naver.maps.Event.addListener(marker, "click", () => showHospitalDetail(hospital, data));
       bounds.extend(position);
       markerCount++;
@@ -219,6 +229,8 @@ async function showMap() {
     showAll();
     setupMyLocation(map);
     document.querySelector("#all").onclick = showAll;
+    // 추가: 전체 보기에서는 모든 병원 핀을 다시 표시한다.
+    document.querySelector("#all").addEventListener("click", () => window.hospitalRouteView?.showAll());
     document.querySelector("#plus").onclick = () => map.setZoom(map.getZoom()+1);
     document.querySelector("#minus").onclick = () => map.setZoom(map.getZoom()-1);
     document.querySelectorAll("nav button").forEach(button => button.disabled = false);
