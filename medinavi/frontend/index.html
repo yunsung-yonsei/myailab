@@ -30,8 +30,7 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
     <form id="natural-search">
         <p>
             <label for="natural-query">문장으로 의료기관 찾기</label><br>
-            <textarea id="natural-query" rows="2" maxlength="200" placeholder="30분 안에 갈 수 있는 지역응급의료센터 찾아줘" required>
-            </textarea>
+            <textarea id="natural-query" rows="2" maxlength="200" placeholder="30분 안에 갈 수 있는 지역응급의료센터 찾아줘" required></textarea>
         </p>
         <button id="parse-search" type="submit">검색조건 확인</button>
         <p id="natural-status" role="status"></p>
@@ -44,7 +43,7 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
             <dt>최대 예상 이동시간</dt>
             <dd id="confirm-minutes"></dd>
         </dl>
-        <p id="confiem-note" role="status"></p>
+        <p id="confirm-note" role="status"></p>
         <button id="edit-search" type="button">조건 수정</button>
         <button id="confirm-search" type="button" disabled>이 조건으로 검색</button>
     </dialog>
@@ -81,9 +80,11 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 <p id="route-info" role="status"></p>
 </section>
 <section><h2>의료기관 목록</h2><ul id="hospital-list"></ul></section></main>
-<script src="/static/map.js?v=1"></script>
+<script src="/static/map.js?v=10"></script>
 <!-- 추가: 병원 강조·내 위치·자동 경로 표시 기능 -->
 <script src="/static/hospital-route-view.js?v=1"></script>
+<!-- 추가: 문장으로 검색조건을 해석하는 AI 검색 -->
+<script src="/static/hospital-search-ai.js?v=1"></script>
 <!-- 웹 지도용 공개 Client ID만 사용한다. -->
 <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=qbtbo9ux4q" onload="showMap()" onerror="mapError()"></script>
 </html>
