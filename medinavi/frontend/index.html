@@ -27,6 +27,27 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
     <h1>강원 응급의료기관 지도</h1>
 <section aria-labelledby="search-title">
     <h2 id="search-title">조건으로 의료기관 찾기</h2>
+    <form id="natural-search">
+        <p>
+            <label for="natural-query">문장으로 의료기관 찾기</label><br>
+            <textarea id="natural-query" rows="2" maxlength="200" placeholder="30분 안에 갈 수 있는 지역응급의료센터 찾아줘" required>
+            </textarea>
+        </p>
+        <button id="parse-search" type="submit">검색조건 확인</button>
+        <p id="natural-status" role="status"></p>
+    </form>
+    <dialog id="search-confirm" aria-labelledby="confirm-title" style="max-width: calc(100% - 2rem)">
+        <h2 id="confirm-title">검색조건 확인</h2>
+        <dl>
+            <dt>응급의료기관 유형</dt>
+            <dd id="confirm-type"></dd>
+            <dt>최대 예상 이동시간</dt>
+            <dd id="confirm-minutes"></dd>
+        </dl>
+        <p id="confiem-note" role="status"></p>
+        <button id="edit-search" type="button">조건 수정</button>
+        <button id="confirm-search" type="button" disabled>이 조건으로 검색</button>
+    </dialog>
     <form id="hospital-search">
         <p>
             <label for="hospital-type">응급의료기관 유형</label><br>
@@ -60,7 +81,7 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 <p id="route-info" role="status"></p>
 </section>
 <section><h2>의료기관 목록</h2><ul id="hospital-list"></ul></section></main>
-<script src="/static/map.js?v=9"></script>
+<script src="/static/map.js?v=1"></script>
 <!-- 추가: 병원 강조·내 위치·자동 경로 표시 기능 -->
 <script src="/static/hospital-route-view.js?v=1"></script>
 <!-- 웹 지도용 공개 Client ID만 사용한다. -->
