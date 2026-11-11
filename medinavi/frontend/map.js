@@ -53,7 +53,7 @@ async function showHospitalRoute(hospital, savedRoute = null) {
       if (controller.signal.aborted) return;
       if (!response.ok) {
         const detail = typeof result?.detail === "string"? result.detail: "서버에서 이동정보를 받지 못했어요.";
-        routeInfo.textContent = `이동정보 조회 실패 (HTTP${response.status}) · ${detail}`;
+        routeInfo.textContent = `이동정보 조회 실패 (HTTP ${response.status}) · ${detail}`;
         return;
       }
     }
@@ -254,9 +254,9 @@ function setupHospitalSearch(data){
   const minuteInput = document.querySelector("#max-minutes");
   const searchButton = document.querySelector("#search-button");
   const status = document.querySelector("#search-status");
-  const results = document.querySelector("search-results");
-  const unknownSection = document.querySelector("#search-unknown")
-  const unknownList = document.querySelector("#search-unkown-list");
+  const results = document.querySelector("#search-results");
+  const unknownSection = document.querySelector("#search-unknown");
+  const unknownList = document.querySelector("#search-unknown-list");
   let searchRequest = null;
 
   const types = [...new Set(data.items.map(hospital => hospital.dutyEmclsName))].filter(Boolean);
@@ -289,7 +289,7 @@ function setupHospitalSearch(data){
     } catch (error) {
       if (!signal.aborted) console.error(error);
     }
-    return {hospital, route: all};
+    return {hospital, route: null};
   }
   document.querySelector("#my-location").addEventListener("click", resetSearch);
   form.addEventListener("input", resetSearch);
@@ -302,21 +302,21 @@ function setupHospitalSearch(data){
       status.textContent = "지도에서 '내 위치'를 먼저 확인해 주세요.";
       return;
     }
-    const maxMinutes = minutesInput.valueAsNumber;
+    const maxMinutes = minuteInput.valueAsNumber;
     const candidates = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
     const controller = new AbortController();
     searchRequest = controller;
     searchButton.disabled = true;
     status.textContent = "병원별 예상 이동시간을 조회하고 있어요.";
     const lookedUp = [];
-    const batchsize = 4;
+    const batchSize = 4;
     for (let index = 0; index < candidates.length; index +=batchSize){
       const batch = candidates.slice(index, index + batchSize);
       const entries = await Promise.all(batch.map(hospital => lookupRoute(hospital, origin, controller.signal)));
       if (controller.signal.aborted) return;
       lookedUp.push(...entries);
     }
-    const matches = lookedUp.filter(({route}) => route && route.duration_ms <= maxMinutes * 60000).sorted((a, b) => a.route.duration_ms - b.route.duration_ms);
+    const matches = lookedUp.filter(({route}) => route && route.duration_ms <= maxMinutes * 60000).sort((a, b) => a.route.duration_ms - b.route.duration_ms);
     const topFive = matches.slice(0, 5);
     for (const {hospital, route} of topFive){
       const item = document.createElement("li");
@@ -324,7 +324,7 @@ function setupHospitalSearch(data){
       button.type = "button";
       const minutes = Math.ceil(route.duration_ms / 60000);
       const distance = (route.distance_m / 1000).toFixed(1);
-      button.textContent = hospital.dutyName + ". 약 " + minutes + "분 ." + distance + "km";
+      button.textContent = hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km";
       button.onclick = () => showHospitalDetail(hospital, data, route);
       item.append(button);
       results.append(item);
