@@ -63,8 +63,8 @@ window.hospitalRouteView = (() => {
       hospital.marker.setZIndex(selected ? 500 : 1);
       hospital.marker.setMap(showOnlySelected && !selected ? null : map);
     }
-    // 추가: 목록에서도 같은 병원을 강조한다.
-    document.querySelectorAll("#search-results button[data-hpid]").forEach(button => {
+    // 추가: 목록(조건 검색·증상 추천)에서도 같은 병원을 강조한다.
+    document.querySelectorAll("#search-results button[data-hpid], #recommend-results button[data-hpid]").forEach(button => {
       button.setAttribute("aria-current", String(button.dataset.hpid === selectedId));
     });
     // 출발지를 알 수 있도록 빨간 현재 위치 점은 병원 선택 후에도 유지한다.
