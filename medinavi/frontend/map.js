@@ -6,6 +6,15 @@ window.navermap_authFailure = mapError;
 
 const routeInfo = document.querySelector("#route-info");
 let currentLocation = null;
+
+// 추가: 조건 검색 버튼에 지금 어느 출발지를 기준으로 검색하는지 표시한다.
+function updateSearchButtonLabel() {
+  const button = document.querySelector("#search-button");
+  if (!button) return;
+  button.textContent = currentLocation?.label ? "출발지(" + currentLocation.label + ") 기준으로 검색"
+    : currentLocation ? "내 위치 기준으로 검색"
+    : "출발지를 지정한 뒤 검색";
+}
 let routeRequest = null;
 
 async function fetchRoute(url, signal) {
@@ -161,6 +170,7 @@ function setupMyLocation(map) {
     routeInfo.textContent = "병원을 선택하면 " + (label ? "출발지" : "내 위치") + "에서의 이동정보를 보여줘요.";
     // 추가: 위치를 나중에 확인한 경우에도 선택 병원의 경로를 조회한다.
     window.hospitalRouteView?.locationReady(MyLocationMarker);
+    updateSearchButtonLabel();
   }
 
   // 추가: 출발지가 바뀌기 전에 이전 경로·검색 결과를 정리한다.
@@ -170,6 +180,7 @@ function setupMyLocation(map) {
     // 추가: 출발지 재조회 중에는 이전 경로를 제거한다.
     window.hospitalRouteView?.locationReset();
     document.dispatchEvent(new Event("originchange"));
+    updateSearchButtonLabel();
     return ++originVersion;
   }
 
