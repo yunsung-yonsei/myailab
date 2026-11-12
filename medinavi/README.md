@@ -13,7 +13,8 @@
 | `frontend/index.html` | 지도·병원 목록·상세정보 화면과 모바일 스타일 |
 | `frontend/map.js` | 지도 표시, 현재 위치, 병원 목록, 거리·시간 조회 |
 | `frontend/hospital-route-view.js` | 선택 병원 초록 핀 강조, 빨간 내 위치 점 유지, 경로선, 시간·거리 상자 |
-| `data/hospitals.json` | 강원 23개 의료기관의 항목명·값·출처·조회 시점 |
+| `data/hospitals.json` | 강원 23개 의료기관의 항목명·값·출처·조회 시점, 등록 진료과목(`departments`) |
+| `tools/fetch_departments.py` | 기관 ID로 국립중앙의료원 기본정보를 조회해 등록 진료과목을 `hospitals.json`에 합치는 스크립트 |
 | `requirements.txt` | 서버 실행에 필요한 Python 라이브러리 |
 | `.env.example` | 실제 인증정보가 없는 환경변수 입력 양식 |
 | `server.ipynb` | 개발용 노트북 (Git 업로드 제외 대상) |
@@ -70,6 +71,14 @@ python -m venv .venv
 5. 다른 병원을 누르면 경로·상자가 교체됩니다. `전체 보기`는 경로·상자를 지우고 전체 병원 핀을 복원합니다.
 
 휴대폰에서는 `https://medinavi.onrender.com`으로 접속합니다. 위치 기능은 HTTPS 주소에서만 동작합니다.
+
+### 등록 진료과목 검색
+
+- 조건 검색의 **등록 진료과목**은 선택 조건입니다. 고르면 기관 유형과 진료과목으로 후보를 먼저 줄인 뒤 길찾기로 이동시간을 비교합니다.
+- 결과에는 `○○과 등록 확인 · 현재 수용 여부 확인 필요`로 표시합니다. 등록 진료과목은 현재 진료·응급환자 수용 가능 여부를 뜻하지 않습니다.
+- 진료과목 자료가 비어 있는 기관은 결과에서 빼고 **진료과목 확인 필요** 목록에 따로 보여줍니다.
+- 병원마다 이름이 다른 같은 과목은 `app.py`의 `DEPARTMENT_ALIASES`에서 묶습니다 (예: `구강안면외과` → `구강악안면외과`).
+- 진료과목 자료를 새로 받으려면 `medinavi/.env`에 `EMERGENCY_API_KEY`를 넣고 `python tools/fetch_departments.py --write`를 실행합니다. 먼저 `--sample 3`으로 몇 곳만 확인할 수 있습니다.
 
 ## 6. 코드와 변수 설명
 

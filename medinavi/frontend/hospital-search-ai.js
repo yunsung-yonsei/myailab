@@ -9,6 +9,7 @@
   const note = document.querySelector("#confirm-note");
   const hospitalForm = document.querySelector("#hospital-search");
   const typeSelect = document.querySelector("#hospital-type");
+  const departmentSelect = document.querySelector("#department");
   const minutesInput = document.querySelector("#max-minutes");
   const searchButton = document.querySelector("#search-button");
   let conditions = null;
@@ -30,9 +31,11 @@
         throw new Error(typeof result.detail === "string" ? result.detail: "검색조건을 해석하지 못했어요.");
       }
       const {
-        hospital_type: type, max_minutes: minutes, has_unsupported_conditions: unsupported,} = result;
+        hospital_type: type, department, max_minutes: minutes, has_unsupported_conditions: unsupported,} = result;
       const validMinutes = Number.isSafeInteger(minutes) && minutes >0;
       document.querySelector("#confirm-type").textContent = type || "입력 필요";
+      // 추가: 진료과목은 선택 조건이라 없으면 '선택 안 함'으로 보여준다.
+      document.querySelector("#confirm-department").textContent = department || "선택 안 함";
       document.querySelector("#confirm-minutes").textContent = validMinutes ? minutes + "분 이내": "입력 필요";
       const messages = [];
       if (!type || !validMinutes) {
@@ -44,7 +47,7 @@
       note.textContent = messages.join(" ");
       if (type && validMinutes && unsupported === false)
       {
-        conditions = {type, minutes};
+        conditions = {type, minutes, department: department || ""};
         confirm.disabled = false;
       }
       status.textContent = "";
@@ -72,7 +75,12 @@
       note.textContent = "기관 유형을 선택 목록에서 확인해 주세요.";
       return;
     }
+    if (conditions.department && !Array.from(departmentSelect.options).some(option => option.value === conditions.department)) {
+      note.textContent = "진료과목을 선택 목록에서 확인해 주세요.";
+      return;
+    }
     typeSelect.value = conditions.type;
+    departmentSelect.value = conditions.department;
     minutesInput.value = conditions.minutes;
     dialog.close();
     hospitalForm.requestSubmit();
