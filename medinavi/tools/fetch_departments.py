@@ -7,8 +7,8 @@
 2단계 (23곳 전체를 조회해 data/hospitals.json에 합침):
     python tools/fetch_departments.py --write
 
-인증키는 공공데이터포털의 일반 인증키를 환경변수 DATA_GO_KR_SERVICE_KEY로 넣는다.
-(medinavi/.env 에 DATA_GO_KR_SERVICE_KEY=... 를 적어도 된다. Encoding/Decoding 키 모두 사용 가능)
+인증키는 응급의료기관 조회 서비스에 쓰던 EMERGENCY_API_KEY를 그대로 사용한다.
+(환경변수나 medinavi/.env 에서 읽는다. 예전 이름 DATA_GO_KR_SERVICE_KEY도 받는다. Encoding/Decoding 키 모두 사용 가능)
 외부 라이브러리 없이 Python 표준 라이브러리만 사용한다.
 """
 
@@ -33,17 +33,22 @@ OPERATION = "getEgytBassInfoInqire"
 UNKNOWN = "확인 필요"
 
 
+KEY_NAMES = ("EMERGENCY_API_KEY", "DATA_GO_KR_SERVICE_KEY")
+
+
 def load_service_key():
     """환경변수 또는 medinavi/.env 에서 인증키를 읽는다. 값은 화면에 출력하지 않는다."""
-    key = os.getenv("DATA_GO_KR_SERVICE_KEY", "").strip()
+    values = {name: os.getenv(name, "").strip() for name in KEY_NAMES}
     env_path = BASE_DIR / ".env"
-    if not key and env_path.exists():
+    if env_path.exists():
         for line in env_path.read_text(encoding="utf-8-sig").splitlines():
             name, _, value = line.partition("=")
-            if name.strip() == "DATA_GO_KR_SERVICE_KEY":
-                key = value.strip().strip('"').strip("'")
+            name = name.strip()
+            if name in values and not values[name]:
+                values[name] = value.strip().strip('"').strip("'")
+    key = next((values[name] for name in KEY_NAMES if values[name]), "")
     if not key:
-        sys.exit("DATA_GO_KR_SERVICE_KEY 를 환경변수나 medinavi/.env 에 넣어 주세요.")
+        sys.exit("EMERGENCY_API_KEY 를 환경변수나 medinavi/.env 에 넣어 주세요.")
     # Encoding 키(%2B 등 포함)를 넣어도 이중 인코딩되지 않도록 한 번 풀어 둔다.
     return urllib.parse.unquote(key)
 
