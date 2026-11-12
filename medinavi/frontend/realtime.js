@@ -39,10 +39,21 @@
     return Number.isFinite(time) ? Math.max(0, Math.round((Date.now() - time) / 60000)) : null;
   }
 
+  // 응급실 혼잡도: 가용/전체가 50% 이상 원활, 20~50% 보통, 20% 미만 혼잡, 0 이하는 포화 (팀 결정 2026-11-12)
+  function congestion(available, total) {
+    if (available == null) return "";
+    if (available <= 0) return "포화";
+    if (!(total > 0)) return "";
+    const ratio = available / total;
+    return ratio >= 0.5 ? "원활" : ratio >= 0.2 ? "보통" : "혼잡";
+  }
+
   // 0 이하는 병상보다 환자가 많은 포화 상태다. (음수는 대기 환자 수)
-  function bedText(count) {
-    if (count > 0) return String(count);
-    return count === 0 ? "0 (포화)" : "포화 · 대기 " + -count;
+  function bedText(count, total = null) {
+    const level = congestion(count, total);
+    const shown = total > 0 ? count + "/" + total : String(count);
+    if (count > 0) return shown + (total > 0 ? " (" + level + ")" : "");
+    return shown + " (포화" + (count < 0 ? " · 대기 " + -count : "") + ")";
   }
 
   function ageText(age) {
@@ -55,9 +66,24 @@
     if (!data) return error ? "실시간 병상 확인 필요" : "";
     const info = data.hospitals?.[hpid];
     if (!info?.has_beds || info.er_available == null) return "응급실 실시간 정보 없음";
-    const er = info.er_available > 0 ? "응급실 가용 " + info.er_available
-      : info.er_available === 0 ? "응급실 포화(가용 0)" : "응급실 포화 · 대기 " + -info.er_available;
-    return er + " · " + ageText(minutesAgo(info.updated_at));
+    return "응급실 " + bedText(info.er_available, info.er_total) + " · " + ageText(minutesAgo(info.updated_at));
+  }
+
+  // 검색 결과 색 표시용 혼잡도 (원활 / 보통 / 혼잡 / 포화)
+  function level(hpid) {
+    const info = data?.hospitals?.[hpid];
+    return info?.has_beds ? congestion(info.er_available, info.er_total) : "";
+  }
+
+  function isLoaded() {
+    return Boolean(data);
+  }
+
+  // 중증질환 검색 조건용: {label, status, note} 또는 정보 없음(null)
+  function illnessStatus(hpid, label) {
+    const info = data?.hospitals?.[hpid];
+    if (!info?.has_illness) return null;
+    return info.illness.find(item => item.label === label) || null;
   }
 
   function heading(text) {
@@ -126,7 +152,7 @@
       : age == null ? "갱신 시각 확인 필요"
       : age + "분 전 갱신" + (stale ? " · 갱신이 늦어 지금과 다를 수 있어요. 확인 필요" : "");
     meta.classList.toggle("stale", stale);
-    addList(body, "가용 병상", info.beds.map(bed => bed.label + " " + bedText(bed.available)));
+    addList(body, "가용 병상", info.beds.map(bed => bed.label + " " + bedText(bed.available, bed.total)));
     addStatusGroups(body, "시설·장비", info.equipment);
     addStatusGroups(body, "중증질환 수용 가능 (병원 입력 기준)",
       info.illness.map(item => ({label: item.label + (item.note ? " (" + item.note + ")" : ""), status: item.status})));
@@ -138,7 +164,7 @@
     }
   }
 
-  window.medinaviRealtime = {refresh, summary, renderDetail};
+  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, renderDetail};
   refresh();
   // 화면을 보고 있는 동안에는 2분마다 새로 불러온다.
   setInterval(() => {
