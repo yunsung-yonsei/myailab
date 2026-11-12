@@ -227,7 +227,8 @@ async function showMap() {
       const marker = new naver.maps.Marker({map, position, title: hospital.dutyName});
       // 추가: 원본 병원 핀을 별도 기능 파일에 전달한다.
       window.hospitalRouteView?.register(map, hospital, marker);
-      naver.maps.Event.addListener(marker, "click", () => showHospitalDetail(hospital, data));
+      // 추가: 검색 결과 핀이면 검색에서 받은 경로를 그대로 사용한다.
+      naver.maps.Event.addListener(marker, "click", () => showHospitalDetail(hospital, data, window.hospitalRouteView?.routeFor(hospital.hpid)));
       bounds.extend(position);
       markerCount++;
     }
@@ -271,6 +272,8 @@ function setupHospitalSearch(data){
     unknownSection.hidden = true;
     status.textContent = "";
     searchButton.disabled = false;
+    // 추가: 이전 검색의 번호 핀과 경로를 지도에서 정리한다.
+    window.hospitalRouteView?.clearSearch();
   }
   async function lookupRoute(hospital, origin, signal){
     if (!hospital.hpid) return {hospital, route: null};
@@ -318,17 +321,21 @@ function setupHospitalSearch(data){
     }
     const matches = lookedUp.filter(({route}) => route && route.duration_ms <= maxMinutes * 60000).sort((a, b) => a.route.duration_ms - b.route.duration_ms);
     const topFive = matches.slice(0, 5);
-    for (const {hospital, route} of topFive){
+    topFive.forEach(({hospital, route}, index) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
+      // 추가: 지도 핀과 같은 순번을 붙이고, 강조할 때 찾을 수 있도록 기관 ID를 남긴다.
+      button.dataset.hpid = hospital.hpid;
       const minutes = Math.ceil(route.duration_ms / 60000);
       const distance = (route.distance_m / 1000).toFixed(1);
-      button.textContent = hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km";
+      button.textContent = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km";
       button.onclick = () => showHospitalDetail(hospital, data, route);
       item.append(button);
       results.append(item);
-    }
+    });
+    // 추가: 결과를 지도에 1~5번 핀으로 표시한다. 결과가 없으면 기존 지도를 유지한다.
+    window.hospitalRouteView?.showSearchResults(topFive);
     for (const {hospital, route} of lookedUp) {
       if (route) continue;
       const item = document.createElement("li");

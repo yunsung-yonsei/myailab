@@ -22,6 +22,10 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 #my-location {position: absolute; right: 12px; bottom: 36px; z-index: 1;}
 .my-location-dot {display: block; width: 18px; height: 18px; border: 3px solid white; border-radius: 50%; background: #d62828; box-shadow: 0 0 0 2px #d62828;}
 #my-location-status:empty {display: none;}
+/* 추가: 검색 결과 목록. 번호는 버튼 글자에 넣어 지도 핀과 맞춘다. */
+#search-results { list-style:none; padding:0 }
+#search-results button { width:100%; text-align:left; margin-bottom:4px }
+#search-results button[aria-current="true"] { background:#147d52; border-color:#147d52; color:white; font-weight:bold }
 </style>
 <main><header>길라잡이 · 메디네비</header>
     <h1>강원 응급의료기관 지도</h1>
@@ -80,9 +84,9 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 <p id="route-info" role="status"></p>
 </section>
 <section><h2>의료기관 목록</h2><ul id="hospital-list"></ul></section></main>
-<script src="/static/map.js?v=10"></script>
+<script src="/static/map.js?v=11"></script>
 <!-- 추가: 병원 강조·내 위치·자동 경로 표시 기능 -->
-<script src="/static/hospital-route-view.js?v=1"></script>
+<script src="/static/hospital-route-view.js?v=2"></script>
 <!-- 추가: 문장으로 검색조건을 해석하는 AI 검색 -->
 <script src="/static/hospital-search-ai.js?v=1"></script>
 <!-- 웹 지도용 공개 Client ID만 사용한다. -->
