@@ -122,6 +122,8 @@ function showHospitalDetail(hospital, data, savedRoute = null) {
     description.textContent = String(value ?? "").trim() || "확인 필요";
     fields.append(name, description);
   }
+  // 추가: 실시간 병상·중증질환 수용 가능 정보 (realtime.js)
+  window.medinaviRealtime?.renderDetail(hospital);
   detail.hidden = false;
   if (savedRoute) {
     document.querySelector("#map").scrollIntoView({block: "start"});
@@ -388,6 +390,9 @@ function setupHospitalSearch(data){
     }
     const matches = lookedUp.filter(({route}) => route && route.duration_ms <= maxMinutes * 60000).sort((a, b) => a.route.duration_ms - b.route.duration_ms);
     const topFive = matches.slice(0, 5);
+    // 추가: 결과에 붙일 실시간 병상 정보를 최신으로 맞춘다. (2분 안에 받은 값은 그대로 사용)
+    await window.medinaviRealtime?.refresh();
+    if (controller.signal.aborted) return;
     topFive.forEach(({hospital, route}, index) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
@@ -398,6 +403,9 @@ function setupHospitalSearch(data){
       const distance = (route.distance_m / 1000).toFixed(1);
       button.textContent = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km" +
         (department ? "\n" + department + " 등록 확인 · 현재 수용 여부 확인 필요" : "");
+      // 추가: 응급실 실시간 가용병상 한 줄 요약
+      const realtimeText = window.medinaviRealtime?.summary(hospital.hpid);
+      if (realtimeText) button.textContent += "\n" + realtimeText;
       button.onclick = () => showHospitalDetail(hospital, data, route);
       item.append(button);
       results.append(item);
