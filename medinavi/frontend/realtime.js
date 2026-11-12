@@ -79,6 +79,17 @@
     return Boolean(data);
   }
 
+  // 증상 기반 추천용: 장비 상태(가능/불가) 또는 정보 없음(null)
+  function equipmentStatus(hpid, label) {
+    return data?.hospitals?.[hpid]?.equipment?.find(item => item.label === label)?.status || null;
+  }
+
+  // 증상 기반 추천용: 가용 병상 수 또는 정보 없음(null)
+  function bedAvailable(hpid, label) {
+    const bed = data?.hospitals?.[hpid]?.beds?.find(item => item.label === label);
+    return bed ? bed.available : null;
+  }
+
   // 중증질환 검색 조건용: {label, status, note} 또는 정보 없음(null)
   function illnessStatus(hpid, label) {
     const info = data?.hospitals?.[hpid];
@@ -164,7 +175,7 @@
     }
   }
 
-  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, renderDetail};
+  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, equipmentStatus, bedAvailable, renderDetail};
   refresh();
   // 화면을 보고 있는 동안에는 2분마다 새로 불러온다.
   setInterval(() => {

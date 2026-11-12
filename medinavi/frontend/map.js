@@ -360,6 +360,13 @@ function setupHospitalSearch(data){
     }
     return {hospital, route: null};
   }
+  // 추가: 증상 기반 추천(symptom-recommend.js)이 같은 데이터와 길찾기 함수를 쓰도록 공개한다.
+  window.medinaviData = data;
+  window.medinaviLookupRoute = lookupRoute;
+  // 추가: 증상 기반 추천을 실행하면 조건 검색 결과를 정리한다.
+  document.addEventListener("medinavi-search", event => {
+    if (event.detail !== "condition") resetSearch();
+  });
   document.querySelector("#my-location").addEventListener("click", resetSearch);
   // 추가: 주소로 출발지를 바꿔도 이전 검색 결과를 정리한다.
   document.addEventListener("originchange", resetSearch);
@@ -368,6 +375,7 @@ function setupHospitalSearch(data){
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     resetSearch();
+    document.dispatchEvent(new CustomEvent("medinavi-search", {detail: "condition"}));
     const origin = currentLocation;
     if (!origin) {
       status.textContent = "'내 위치'를 확인하거나 출발지 주소를 먼저 지정해 주세요.";
