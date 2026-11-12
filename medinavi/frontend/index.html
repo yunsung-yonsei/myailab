@@ -23,7 +23,8 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 .my-location-dot {display: block; width: 18px; height: 18px; border: 3px solid white; border-radius: 50%; background: #d62828; box-shadow: 0 0 0 2px #d62828;}
 #my-location-status:empty {display: none;}
 /* 추가: 검색 결과 목록. 번호는 버튼 글자에 넣어 지도 핀과 맞춘다. */
-#search-results { list-style:none; padding:0 }
+#search-results, #origin-results { list-style:none; padding:0 }
+#origin-results button { width:100%; text-align:left; margin-bottom:4px }
 #search-results button { width:100%; text-align:left; margin-bottom:4px; white-space:pre-line }
 #search-results button[aria-current="true"] { background:#147d52; border-color:#147d52; color:white; font-weight:bold }
 </style>
@@ -31,6 +32,15 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
     <h1>강원 응급의료기관 지도</h1>
 <section aria-labelledby="search-title">
     <h2 id="search-title">조건으로 의료기관 찾기</h2>
+    <form id="origin-search">
+        <p>
+            <label for="origin-query">출발지 주소 (지정하지 않으면 내 위치 사용)</label><br>
+            <input id="origin-query" type="search" maxlength="100" placeholder="예: 강릉시 강릉대로 33" autocomplete="street-address" required>
+        </p>
+        <button id="origin-button" type="submit">주소 검색</button>
+        <p id="origin-status" role="status"></p>
+        <ul id="origin-results" aria-label="주소 검색 결과"></ul>
+    </form>
     <form id="natural-search">
         <p>
             <label for="natural-query">문장으로 의료기관 찾기</label><br>
@@ -97,11 +107,13 @@ button { min-width:48px; min-height:48px; padding:8px 16px; border:1px solid #50
 <p id="route-info" role="status"></p>
 </section>
 <section><h2>의료기관 목록</h2><ul id="hospital-list"></ul></section></main>
-<script src="/static/map.js?v=12"></script>
+<script src="/static/map.js?v=13"></script>
 <!-- 추가: 병원 강조·내 위치·자동 경로 표시 기능 -->
-<script src="/static/hospital-route-view.js?v=2"></script>
+<script src="/static/hospital-route-view.js?v=3"></script>
 <!-- 추가: 문장으로 검색조건을 해석하는 AI 검색 -->
 <script src="/static/hospital-search-ai.js?v=2"></script>
+<!-- 추가: 주소를 검색해 출발지로 지정 -->
+<script src="/static/origin-search.js?v=1"></script>
 <!-- 웹 지도용 공개 Client ID만 사용한다. -->
 <script src="https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=qbtbo9ux4q" onload="showMap()" onerror="mapError()"></script>
 </html>

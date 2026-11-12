@@ -76,7 +76,9 @@ window.hospitalRouteView = (() => {
       (searching ? "지도에 검색 결과 " + searchResults.length + "곳 표시"
         : showOnlySelected ? "지도에 선택 병원 1곳 표시" : "지도에 표시 " + hospitals.size + "곳");
     if (showOnlySelected) {
-      document.querySelector("#my-location-status").textContent = "확인한 내 위치를 출발지로 사용해요.";
+      document.querySelector("#my-location-status").textContent = currentLocation.label
+        ? "지정한 출발지(" + currentLocation.label + ")를 사용해요."
+        : "확인한 내 위치를 출발지로 사용해요.";
     }
   }
 
