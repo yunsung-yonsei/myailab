@@ -26,10 +26,28 @@ from fetch_departments import BASE_URL, DATA_PATH, load_service_key  # noqa: E40
 
 KST = timezone(timedelta(hours=9))
 REGION_OPERATIONS = {
-    "실시간 가용병상": "getEmrrmRlTmUsefulSckbdInfoInqire",
+    "실시간 가용병상": "getEmrrmRltmUsefulSckbdInfoInqire",
     "중증질환 수용가능": "getSrsillDissAceptncPosblInfoInqire",
 }
 BASIC_OPERATION = "getEgytBassInfoInqire"
+# 활용가이드(V13) 기준 중증질환 항목 이름. 값은 Y(가능), 불가능/N(불가), 정보미제공 등으로 온다.
+SEVERE_ILLNESS_NAMES = {
+    "MKioskTy28": "응급실(Emergency gate keeper)",
+    "MKioskTy1": "[재관류중재술] 심근경색", "MKioskTy2": "[재관류중재술] 뇌경색",
+    "MKioskTy3": "[뇌출혈수술] 거미막하출혈", "MKioskTy4": "[뇌출혈수술] 거미막하출혈 외",
+    "MKioskTy5": "[대동맥응급] 흉부", "MKioskTy6": "[대동맥응급] 복부",
+    "MKioskTy7": "[담낭담관질환] 담낭질환", "MKioskTy8": "[담낭담관질환] 담도포함질환",
+    "MKioskTy9": "[복부응급수술] 비외상", "MKioskTy10": "[장중첩/폐색] 영유아",
+    "MKioskTy11": "[응급내시경] 성인 위장관", "MKioskTy12": "[응급내시경] 영유아 위장관",
+    "MKioskTy13": "[응급내시경] 성인 기관지", "MKioskTy14": "[응급내시경] 영유아 기관지",
+    "MKioskTy15": "[저체중출생아] 집중치료", "MKioskTy16": "[산부인과응급] 분만",
+    "MKioskTy17": "[산부인과응급] 산과수술", "MKioskTy18": "[산부인과응급] 부인과수술",
+    "MKioskTy19": "[중증화상] 전문치료", "MKioskTy20": "[사지접합] 수족지접합",
+    "MKioskTy21": "[사지접합] 수족지접합 외", "MKioskTy22": "[응급투석] HD",
+    "MKioskTy23": "[응급투석] CRRT", "MKioskTy24": "[정신과적응급] 폐쇄병동입원",
+    "MKioskTy25": "[안과적수술] 응급", "MKioskTy26": "[영상의학혈관중재] 성인",
+    "MKioskTy27": "[영상의학혈관중재] 영유아",
+}
 # 강원의 시도 이름이 API에서 어떻게 쓰이는지 확실하지 않아 순서대로 시도한다.
 REGION_NAMES = ("강원특별자치도", "강원도")
 
@@ -129,7 +147,9 @@ def main():
         print("\n  [항목별 요약: 값이 있는 기관 수 / 음수 개수 / 예시]")
         for name, stat in sorted(summarize_fields(matched or items).items()):
             negative = f" · 음수 {stat['negative']}" if stat["negative"] else ""
-            print(f"    {name}: {stat['filled']}곳{negative} · 예: {', '.join(stat['examples']) or '(빈 값)'}")
+            label = SEVERE_ILLNESS_NAMES.get(name.removesuffix("Msg"))
+            label = f" ({label}{' 조건' if name.endswith('Msg') else ''})" if label else ""
+            print(f"    {name}{label}: {stat['filled']}곳{negative} · 예: {', '.join(stat['examples']) or '(빈 값)'}")
 
         ages = [(item.get("dutyName", item.get("hpid")), update_age(item.get("hvidate", ""), now)) for item in matched]
         ages = [(name, age) for name, age in ages if age is not None]
