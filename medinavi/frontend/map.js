@@ -97,6 +97,8 @@ function showHospitalDetail(hospital, data, savedRoute = null) {
   const details = [
     ["기관명", hospital.dutyName],
     ["응급의료기관 유형", hospital.dutyEmclsName],
+    // 추가: 국립중앙의료원 자료의 등록 진료과목. 비어 있으면 '확인 필요'로 표시된다.
+    ["등록 진료과목", (hospital.departments || []).join(", ")],
     ["주소", hospital.dutyAddr],
     ["응급실 연락처", hospital.dutyTel3],
     ["정보 출처", data.source],
@@ -258,11 +260,19 @@ function setupHospitalSearch(data){
   const results = document.querySelector("#search-results");
   const unknownSection = document.querySelector("#search-unknown");
   const unknownList = document.querySelector("#search-unknown-list");
+  const departmentSelect = document.querySelector("#department");
+  const deptUnknownSection = document.querySelector("#search-dept-unknown");
+  const deptUnknownList = document.querySelector("#search-dept-unknown-list");
   let searchRequest = null;
 
   const types = [...new Set(data.items.map(hospital => hospital.dutyEmclsName))].filter(Boolean);
   for (const type of types){
     typeSelect.add(new Option(type, type));
+  }
+  // 추가: 데이터에 등록된 모든 진료과목을 가나다순으로 선택지에 넣는다.
+  const departments = [...new Set(data.items.flatMap(hospital => hospital.departments || []))].sort((a, b) => a.localeCompare(b, "ko"));
+  for (const department of departments){
+    departmentSelect.add(new Option(department, department));
   }
   function resetSearch(){
     searchRequest?.abort();
@@ -270,6 +280,8 @@ function setupHospitalSearch(data){
     results.replaceChildren();
     unknownList.replaceChildren();
     unknownSection.hidden = true;
+    deptUnknownList.replaceChildren();
+    deptUnknownSection.hidden = true;
     status.textContent = "";
     searchButton.disabled = false;
     // 추가: 이전 검색의 번호 핀과 경로를 지도에서 정리한다.
@@ -306,7 +318,17 @@ function setupHospitalSearch(data){
       return;
     }
     const maxMinutes = minuteInput.valueAsNumber;
-    const candidates = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
+    const department = departmentSelect.value;
+    const typeMatched = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
+    // 추가: 진료과목을 골랐으면 길찾기 전에 등록된 병원만 남긴다. 자료가 비어 있는 병원은 따로 안내한다.
+    const candidates = department ? typeMatched.filter(hospital => (hospital.departments || []).includes(department)) : typeMatched;
+    const deptUnknown = department ? typeMatched.filter(hospital => !(hospital.departments || []).length) : [];
+    for (const hospital of deptUnknown) {
+      const item = document.createElement("li");
+      item.textContent = hospital.dutyName || "기관명 확인 필요";
+      deptUnknownList.append(item);
+    }
+    deptUnknownSection.hidden = deptUnknown.length === 0;
     const controller = new AbortController();
     searchRequest = controller;
     searchButton.disabled = true;
@@ -329,7 +351,8 @@ function setupHospitalSearch(data){
       button.dataset.hpid = hospital.hpid;
       const minutes = Math.ceil(route.duration_ms / 60000);
       const distance = (route.distance_m / 1000).toFixed(1);
-      button.textContent = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km";
+      button.textContent = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km" +
+        (department ? "\n" + department + " 등록 확인 · 현재 수용 여부 확인 필요" : "");
       button.onclick = () => showHospitalDetail(hospital, data, route);
       item.append(button);
       results.append(item);
@@ -343,7 +366,11 @@ function setupHospitalSearch(data){
       unknownList.append(item);
     }
     unknownSection.hidden = unknownList.children.length === 0;
-    status.textContent = matches.length ? "예상 " + maxMinutes + "분 이내 " + matches.length + "곳 중 " + topFive.length + "곳 표시": "예상 " + maxMinutes + "분 이내로 확인된 병원이 없어요.";
+    const condition = department ? " " + department + " 등록 병원" : "";
+    status.textContent = (matches.length
+      ? "예상 " + maxMinutes + "분 이내" + condition + " " + matches.length + "곳 중 " + topFive.length + "곳 표시"
+      : "예상 " + maxMinutes + "분 이내로 확인된" + (condition || " 병원") + "이 없어요.") +
+      (department ? " 현재 응급환자 수용 여부는 병원에 확인해 주세요." : "");
     searchRequest = null;
     searchButton.disabled = false;
   });
