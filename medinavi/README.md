@@ -13,6 +13,7 @@
 | `frontend/index.html` | 지도·병원 목록·상세정보 화면과 모바일 스타일 |
 | `frontend/map.js` | 지도 표시, 현재 위치, 병원 목록, 거리·시간 조회 |
 | `frontend/hospital-route-view.js` | 선택 병원 초록 핀 강조, 빨간 내 위치 점 유지, 경로선, 시간·거리 상자 |
+| `frontend/origin-search.js` | 주소를 검색해 출발지로 지정 (서버 `/api/geocode` 사용) |
 | `data/hospitals.json` | 강원 23개 의료기관의 항목명·값·출처·조회 시점, 등록 진료과목(`departments`) |
 | `tools/fetch_departments.py` | 기관 ID로 국립중앙의료원 기본정보를 조회해 등록 진료과목을 `hospitals.json`에 합치는 스크립트 |
 | `requirements.txt` | 서버 실행에 필요한 Python 라이브러리 |
@@ -35,12 +36,13 @@ Render 대시보드의 **medinavi** 서비스 → **Settings**에 다음 값이 
 
 - `NAVER_MAPS_CLIENT_ID`: 네이버 Maps 인증 ID
 - `NAVER_MAPS_CLIENT_SECRET`: 네이버 Maps 인증 비밀키
+- (선택) `NAVER_GEOCODING_CLIENT_ID`, `NAVER_GEOCODING_CLIENT_SECRET`: 주소 검색용 키를 별도 애플리케이션으로 발급받은 경우에만 넣습니다. 없으면 위 Maps 키를 그대로 사용합니다.
 
 `--no-access-log`는 좌표가 포함된 요청 주소를 접속 로그에 남기지 않도록 하는 옵션입니다.
 
 ## 3. 외부 설정 확인
 
-- 네이버 Maps 애플리케이션에서 **Web Dynamic Map**과 **Directions 5**를 사용할 수 있어야 합니다.
+- 네이버 Maps 애플리케이션에서 **Web Dynamic Map**, **Directions 5**, **Geocoding**(출발지 주소 검색)을 사용할 수 있어야 합니다.
 - 네이버 Maps의 Web 서비스 URL에 `https://medinavi.onrender.com`(로컬 시험 시 `http://localhost:8000`)이 등록되어야 지도가 열립니다.
 - 웹 지도는 `frontend/index.html`의 공개 Client ID를 사용합니다. Render 환경변수의 인증정보도 같은 Maps 애플리케이션 것이어야 합니다.
 - Render 무료 인스턴스는 한동안 접속이 없으면 잠들어, 첫 접속이 30초~1분 정도 느릴 수 있습니다.
@@ -71,6 +73,13 @@ python -m venv .venv
 5. 다른 병원을 누르면 경로·상자가 교체됩니다. `전체 보기`는 경로·상자를 지우고 전체 병원 핀을 복원합니다.
 
 휴대폰에서는 `https://medinavi.onrender.com`으로 접속합니다. 위치 기능은 HTTPS 주소에서만 동작합니다.
+
+### 출발지 주소 지정
+
+- 출발지는 기본으로 현재 위치(빨간 점)를 사용합니다. **출발지 주소**에 주소를 입력해 검색하고 후보를 고르면 그 지점(파란 핀)이 출발지가 됩니다.
+- 조건 검색, 병원 선택 시 길찾기, 지도 범위는 모두 지정한 출발지를 기준으로 동작합니다. `내 위치`를 누르면 현재 위치로 돌아갑니다.
+- 네이버 Geocoding은 **주소**를 좌표로 바꾸는 기능이라 `강릉시 강릉대로 33`처럼 시·군과 도로명·건물번호를 넣어야 잘 찾습니다. `강릉시청` 같은 장소 이름은 찾지 못할 수 있습니다.
+- 입력한 주소는 서버 로그에 남기지 않습니다.
 
 ### 등록 진료과목 검색
 

@@ -28,7 +28,7 @@ async function showHospitalRoute(hospital, savedRoute = null) {
   // 병원을 바꾸면 이전 요청의 결과가 화면에 표시되지 않도록 한다.
   routeRequest?.abort();
   if (!currentLocation) {
-    routeInfo.textContent = "'내 위치'를 눌러 이동거리를 확인하세요.";
+    routeInfo.textContent = "'내 위치'를 누르거나 출발지 주소를 지정해 이동거리를 확인하세요.";
     return;
   }
   if (!hospital.hpid) {
@@ -70,7 +70,8 @@ async function showHospitalRoute(hospital, savedRoute = null) {
   window.hospitalRouteView?.draw(hospital, result);
   const distanceKm = (distance_m / 1000).toFixed(1);
   const minutes = Math.ceil(duration_ms / 60000);
-  routeInfo.textContent = `내 위치 기준 · 자동차 이동거리 ${distanceKm}km · 예상 ${minutes}분`;
+  const originText = currentLocation.label ? "출발지(" + currentLocation.label + ")" : "내 위치";
+  routeInfo.textContent = `${originText} 기준 · 자동차 이동거리 ${distanceKm}km · 예상 ${minutes}분`;
   } catch (error) {
     if (!controller.signal.aborted) {
       routeInfo.textContent = httpStatus === null ? `이동정보 서버에 연결하지 못했어요. (${error.name})`: `이동정보 응답 처리 오류 (HTTP ${httpStatus}) · ${error.message}`;
@@ -126,6 +127,60 @@ function setupMyLocation(map) {
   const button = document.querySelector("#my-location");
   const message = document.querySelector("#my-location-status");
   let MyLocationMarker = null;
+  // 추가: 위치 요청 중에 주소로 출발지를 바꾸면 늦게 도착한 위치 응답을 무시한다.
+  let originVersion = 0;
+  const gpsIcon = {
+    content: '<span class="my-location-dot" aria-hidden="true"></span>',
+    size: new naver.maps.Size(18, 18),
+    anchor: new naver.maps.Point(9, 9),
+  };
+  // 추가: 주소로 지정한 출발지는 파란 핀으로 구분한다.
+  const addressIcon = {
+    content: '<svg width="30" height="41" viewBox="0 0 22 30" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">' +
+      '<path d="M11 29C8 24 1 17 1 11a10 10 0 0 1 20 0c0 6-7 13-10 18Z" fill="#1d4ed8" stroke="white"/>' +
+      '<circle cx="11" cy="11" r="4" fill="white"/></svg>',
+    size: new naver.maps.Size(30, 41),
+    anchor: new naver.maps.Point(15, 41),
+  };
+
+  // 추가: 현재 위치와 주소 출발지가 같은 표시·경로 기능을 쓰도록 한곳에서 출발지를 정한다.
+  function placeOrigin(latitude, longitude, label) {
+    currentLocation = {latitude, longitude, label};
+    const position = new naver.maps.LatLng(latitude, longitude);
+    const icon = label ? addressIcon : gpsIcon;
+    const title = label ? "출발지: " + label : "내 위치";
+    if (MyLocationMarker) {
+      MyLocationMarker.setPosition(position);
+      MyLocationMarker.setIcon(icon);
+      MyLocationMarker.setTitle(title);
+    } else {
+      MyLocationMarker = new naver.maps.Marker({map, position, title, zIndex: 1000, icon});
+    }
+    map.setCenter(position);
+    map.setZoom(Math.max(map.getZoom(), label ? 13 : 15));
+    routeInfo.textContent = "병원을 선택하면 " + (label ? "출발지" : "내 위치") + "에서의 이동정보를 보여줘요.";
+    // 추가: 위치를 나중에 확인한 경우에도 선택 병원의 경로를 조회한다.
+    window.hospitalRouteView?.locationReady(MyLocationMarker);
+  }
+
+  // 추가: 출발지가 바뀌기 전에 이전 경로·검색 결과를 정리한다.
+  function startOriginChange() {
+    routeRequest?.abort();
+    currentLocation = null;
+    // 추가: 출발지 재조회 중에는 이전 경로를 제거한다.
+    window.hospitalRouteView?.locationReset();
+    document.dispatchEvent(new Event("originchange"));
+    return ++originVersion;
+  }
+
+  // 추가: 주소 검색(origin-search.js)에서 고른 좌표를 출발지로 사용한다.
+  window.setAddressOrigin = (latitude, longitude, label) => {
+    startOriginChange();
+    button.disabled = false;
+    placeOrigin(latitude, longitude, label);
+    message.textContent = "출발지: " + label + " · '내 위치'를 누르면 현재 위치로 돌아가요.";
+  };
+
   button.disabled = false;
   button.addEventListener("click", () => {
     if (!window.isSecureContext) {
@@ -138,51 +193,28 @@ function setupMyLocation(map) {
     }
     button.disabled = true;
     message.textContent = "내 위치를 확인하고 있어요.";
-    routeRequest?.abort();
-    currentLocation = null;
-    // 추가: 출발지 재조회 중에는 이전 경로를 제거한다.
-    window.hospitalRouteView?.locationReset();
+    const version = startOriginChange();
     routeInfo.textContent = "위치를 확인한 뒤 병원을 선택해 주세요.";
     navigator.geolocation.getCurrentPosition(
       ({coords}) => {
-        currentLocation = {
-          latitude: coords.latitude, longitude: coords.longitude,
-        };
-        routeInfo.textContent = "병원을 선택하면 내 위치에서의 이동정볼르 보여줘요.";
-        const position = new naver.maps.LatLng(
-          coords.latitude, 
-          coords.longitude
-        );
-      if (MyLocationMarker) {
-        MyLocationMarker.setPosition(position);
-      } else {
-        MyLocationMarker = new naver.maps.Marker({
-          map, position, title: "내 위치", zIndex: 1000, icon: {
-            content: '<span class="my-location-dot" aria-hidden="true"></span>',
-            size: new naver.maps.Size(18, 18),
-            anchor: new naver.maps.Point(9, 9),
-          },
-        });
-      }
-      map.setCenter(position);
-      map.setZoom(Math.max(map.getZoom(), 15));
-      // 추가: 위치를 나중에 확인한 경우에도 선택 병원의 경로를 조회한다.
-      window.hospitalRouteView?.locationReady(MyLocationMarker);
-      message.textContent = "지도에 내 위치를 표시했어요.";
-      button.disabled = false;
+        if (version !== originVersion) return;
+        placeOrigin(coords.latitude, coords.longitude, null);
+        message.textContent = "지도에 내 위치를 표시했어요.";
+        button.disabled = false;
       },
       (error) => {
-        routeInfo.textContent = "'내 위치'를 눌러 이동거리를 확인하세요.";
+        if (version !== originVersion) return;
+        routeInfo.textContent = "'내 위치'를 누르거나 출발지 주소를 지정해 이동거리를 확인하세요.";
         if (MyLocationMarker) {
           MyLocationMarker.setMap(null);
           MyLocationMarker = null;
         }
         if (error.code === 1) {
-          message.textContent = "브라우저의 사이트 설정에서 위치 권한을 허용해 주세요.";
+          message.textContent = "브라우저의 사이트 설정에서 위치 권한을 허용하거나, 출발지 주소를 검색해 주세요.";
         } else if (error.code === 3){
-          message.textContent = "위치 확인 시간이 초과됐어요. 다시 눌러주세요.";
+          message.textContent = "위치 확인 시간이 초과됐어요. 다시 누르거나 출발지 주소를 검색해 주세요.";
         } else {
-          message.textContent = "현재 위치를 가져오지 못했어요.";
+          message.textContent = "현재 위치를 가져오지 못했어요. 출발지 주소를 검색해 주세요.";
         }
         button.disabled = false;
       },
@@ -307,6 +339,8 @@ function setupHospitalSearch(data){
     return {hospital, route: null};
   }
   document.querySelector("#my-location").addEventListener("click", resetSearch);
+  // 추가: 주소로 출발지를 바꿔도 이전 검색 결과를 정리한다.
+  document.addEventListener("originchange", resetSearch);
   form.addEventListener("input", resetSearch);
   searchButton.disabled = false;
   form.addEventListener("submit", async (event) => {
@@ -314,7 +348,7 @@ function setupHospitalSearch(data){
     resetSearch();
     const origin = currentLocation;
     if (!origin) {
-      status.textContent = "지도에서 '내 위치'를 먼저 확인해 주세요.";
+      status.textContent = "'내 위치'를 확인하거나 출발지 주소를 먼저 지정해 주세요.";
       return;
     }
     const maxMinutes = minuteInput.valueAsNumber;

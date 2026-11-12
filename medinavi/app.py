@@ -31,6 +31,10 @@ NAVER_CLIENT_SECRET = os.getenv("NAVER_MAPS_CLIENT_SECRET", "").strip()
 if not NAVER_CLIENT_ID or not NAVER_CLIENT_SECRET:
     raise RuntimeError("네이버 Maps 인증정보를 확인하세요.")
 
+# 주소 검색(Geocoding) 키. 따로 발급받았으면 별도 이름으로 넣고, 없으면 지도·길찾기 키를 그대로 쓴다.
+GEOCODING_CLIENT_ID = os.getenv("NAVER_GEOCODING_CLIENT_ID", "").strip() or NAVER_CLIENT_ID
+GEOCODING_CLIENT_SECRET = os.getenv("NAVER_GEOCODING_CLIENT_SECRET", "").strip() or NAVER_CLIENT_SECRET
+
 app = FastAPI()
 
 # frontend 폴더의 javascript 등의 파일 제공
@@ -138,6 +142,59 @@ async def get_route(hospital_id: str, start_lat: float = Query(..., ge = -90, le
 
     except (KeyError, IndexError, TypeError):
         raise HTTPException(status_code = 502, detail = "길찾기 결과에 필요한 정보가 없습니다.") from None
+GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
+
+@app.get("/api/geocode")
+async def geocode(query: str = Query(..., min_length = 1, max_length = 100)):
+    # 입력한 주소를 좌표로 바꿔 출발지 후보를 돌려준다. 주소는 로그에 남기지 않는다.
+    query = query.strip()
+    if not query:
+        raise HTTPException(422, "검색할 주소를 입력해 주세요.")
+
+    headers = {"x-ncp-apigw-api-key-id": GEOCODING_CLIENT_ID, "x-ncp-apigw-api-key": GEOCODING_CLIENT_SECRET,}
+
+    # 강원 중심 좌표(경도,위도)를 기준으로 가까운 주소가 먼저 오도록 한다.
+    params = {"query": query, "coordinate": "128.3,37.8", "count": 5}
+
+    try:
+        async with httpx.AsyncClient(timeout = 10) as client:
+            response = await client.get(GEOCODE_URL, headers = headers, params = params,)
+
+    except httpx.TimeoutException:
+        raise HTTPException(504, "주소 검색 응답 시간이 초과됐어요.") from None
+
+    except httpx.RequestError as error:
+        raise HTTPException(502, f"주소 검색 연결 오류 ({type(error).__name__})") from None
+
+    if response.status_code in (401, 403):
+        raise HTTPException(502, "주소 검색 권한을 확인해 주세요. 네이버 클라우드 콘솔에서 Geocoding 사용 설정과 인증키를 확인해야 해요.")
+
+    if response.status_code != 200:
+        raise HTTPException(502, f"주소 검색에서 HTTP {response.status_code} 응답을 받았어요.")
+
+    try:
+        data = response.json()
+
+    except ValueError:
+        raise HTTPException(502, "주소 검색 응답을 읽지 못했어요.") from None
+
+    if not isinstance(data, dict) or data.get("status") != "OK":
+        raise HTTPException(502, "주소 검색에 실패했어요. 주소를 다시 확인해 주세요.")
+
+    results = []
+    for address in data.get("addresses") or []:
+        try:
+            latitude = float(address["y"])
+            longitude = float(address["x"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not (math.isfinite(latitude) and math.isfinite(longitude) and -90 <= latitude <= 90 and -180 <= longitude <= 180):
+            continue
+        results.append({"road_address": address.get("roadAddress") or "", "jibun_address": address.get("jibunAddress") or "",
+                        "latitude": latitude, "longitude": longitude,})
+
+    return {"query": query, "results": results[:5], "source": "NAVER Maps Geocoding"}
+
 class NaturalSearchRequest(BaseModel):
     query: str = Field(min_length = 1, max_length = 200)
 
