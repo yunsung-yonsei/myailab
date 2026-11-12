@@ -10,6 +10,7 @@
   const hospitalForm = document.querySelector("#hospital-search");
   const typeSelect = document.querySelector("#hospital-type");
   const departmentSelect = document.querySelector("#department");
+  const illnessSelect = document.querySelector("#illness");
   const minutesInput = document.querySelector("#max-minutes");
   const searchButton = document.querySelector("#search-button");
   let conditions = null;
@@ -31,11 +32,13 @@
         throw new Error(typeof result.detail === "string" ? result.detail: "검색조건을 해석하지 못했어요.");
       }
       const {
-        hospital_type: type, department, max_minutes: minutes, has_unsupported_conditions: unsupported,} = result;
+        hospital_type: type, department, illness, max_minutes: minutes, has_unsupported_conditions: unsupported,} = result;
       const validMinutes = Number.isSafeInteger(minutes) && minutes >0;
       document.querySelector("#confirm-type").textContent = type || "입력 필요";
       // 추가: 진료과목은 선택 조건이라 없으면 '선택 안 함'으로 보여준다.
       document.querySelector("#confirm-department").textContent = department || "선택 안 함";
+      // 추가: 중증질환도 선택 조건이라 없으면 '선택 안 함'으로 보여준다.
+      document.querySelector("#confirm-illness").textContent = illness || "선택 안 함";
       document.querySelector("#confirm-minutes").textContent = validMinutes ? minutes + "분 이내": "입력 필요";
       const messages = [];
       if (!type || !validMinutes) {
@@ -47,7 +50,7 @@
       note.textContent = messages.join(" ");
       if (type && validMinutes && unsupported === false)
       {
-        conditions = {type, minutes, department: department || ""};
+        conditions = {type, minutes, department: department || "", illness: illness || ""};
         confirm.disabled = false;
       }
       status.textContent = "";
@@ -79,8 +82,13 @@
       note.textContent = "진료과목을 선택 목록에서 확인해 주세요.";
       return;
     }
+    if (conditions.illness && !Array.from(illnessSelect.options).some(option => option.value === conditions.illness)) {
+      note.textContent = "중증질환을 선택 목록에서 확인해 주세요.";
+      return;
+    }
     typeSelect.value = conditions.type;
     departmentSelect.value = conditions.department;
+    illnessSelect.value = conditions.illness;
     minutesInput.value = conditions.minutes;
     dialog.close();
     hospitalForm.requestSubmit();

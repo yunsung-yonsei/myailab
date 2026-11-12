@@ -308,6 +308,9 @@ function setupHospitalSearch(data){
   const departmentSelect = document.querySelector("#department");
   const deptUnknownSection = document.querySelector("#search-dept-unknown");
   const deptUnknownList = document.querySelector("#search-dept-unknown-list");
+  const illnessSelect = document.querySelector("#illness");
+  const illUnknownSection = document.querySelector("#search-ill-unknown");
+  const illUnknownList = document.querySelector("#search-ill-unknown-list");
   let searchRequest = null;
 
   const types = [...new Set(data.items.map(hospital => hospital.dutyEmclsName))].filter(Boolean);
@@ -319,6 +322,10 @@ function setupHospitalSearch(data){
   for (const department of departments){
     departmentSelect.add(new Option(department, department));
   }
+  // 추가: 중증질환(수술·시술) 선택지. 서버가 활용가이드 기준 이름을 보내 준다.
+  for (const illness of data.illness_types || []){
+    illnessSelect.add(new Option(illness, illness));
+  }
   function resetSearch(){
     searchRequest?.abort();
     searchRequest = null;
@@ -327,6 +334,8 @@ function setupHospitalSearch(data){
     unknownSection.hidden = true;
     deptUnknownList.replaceChildren();
     deptUnknownSection.hidden = true;
+    illUnknownList.replaceChildren();
+    illUnknownSection.hidden = true;
     status.textContent = "";
     searchButton.disabled = false;
     // 추가: 이전 검색의 번호 핀과 경로를 지도에서 정리한다.
@@ -368,7 +377,7 @@ function setupHospitalSearch(data){
     const department = departmentSelect.value;
     const typeMatched = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
     // 추가: 진료과목을 골랐으면 길찾기 전에 등록된 병원만 남긴다. 자료가 비어 있는 병원은 따로 안내한다.
-    const candidates = department ? typeMatched.filter(hospital => (hospital.departments || []).includes(department)) : typeMatched;
+    const deptMatched = department ? typeMatched.filter(hospital => (hospital.departments || []).includes(department)) : typeMatched;
     const deptUnknown = department ? typeMatched.filter(hospital => !(hospital.departments || []).length) : [];
     for (const hospital of deptUnknown) {
       const item = document.createElement("li");
@@ -379,6 +388,32 @@ function setupHospitalSearch(data){
     const controller = new AbortController();
     searchRequest = controller;
     searchButton.disabled = true;
+    // 추가: 중증질환을 골랐으면 실시간 정보에서 '가능'인 병원만 길찾기한다.
+    // '불가'는 제외한 수만 알리고, 정보미제공·실시간 정보 없음은 따로 목록에 보여준다.
+    const illness = illnessSelect.value;
+    let candidates = deptMatched;
+    let illnessExcluded = 0;
+    if (illness) {
+      status.textContent = "실시간 중증질환 정보를 확인하고 있어요.";
+      await window.medinaviRealtime?.refresh();
+      if (controller.signal.aborted) return;
+      const loaded = Boolean(window.medinaviRealtime?.isLoaded());
+      candidates = [];
+      for (const hospital of deptMatched) {
+        const info = loaded ? window.medinaviRealtime.illnessStatus(hospital.hpid, illness) : null;
+        if (info?.status === "가능") {
+          candidates.push(hospital);
+        } else if (info?.status === "불가") {
+          illnessExcluded += 1;
+        } else {
+          const item = document.createElement("li");
+          item.textContent = (hospital.dutyName || "기관명 확인 필요") + " (" +
+            (!loaded ? "실시간 정보를 불러오지 못함" : info ? "병원 정보미제공" : "실시간 정보 없음") + ")";
+          illUnknownList.append(item);
+        }
+      }
+      illUnknownSection.hidden = illUnknownList.children.length === 0;
+    }
     status.textContent = "병원별 예상 이동시간을 조회하고 있어요.";
     const lookedUp = [];
     const batchSize = 4;
@@ -403,9 +438,17 @@ function setupHospitalSearch(data){
       const distance = (route.distance_m / 1000).toFixed(1);
       button.textContent = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km" +
         (department ? "\n" + department + " 등록 확인 · 현재 수용 여부 확인 필요" : "");
+      // 추가: 중증질환 조건을 골랐으면 병원이 입력한 '가능' 정보와 조건 메모를 보여준다.
+      if (illness) {
+        const note = window.medinaviRealtime?.illnessStatus(hospital.hpid, illness)?.note;
+        button.textContent += "\n" + illness + " 가능(병원 입력)" + (note ? " · " + note : "");
+      }
       // 추가: 응급실 실시간 가용병상 한 줄 요약
       const realtimeText = window.medinaviRealtime?.summary(hospital.hpid);
       if (realtimeText) button.textContent += "\n" + realtimeText;
+      // 추가: 응급실 혼잡도에 따라 결과 왼쪽에 색 띠를 표시한다. (글자로도 함께 표시)
+      const congestion = window.medinaviRealtime?.level(hospital.hpid);
+      if (congestion) button.dataset.congestion = congestion;
       button.onclick = () => showHospitalDetail(hospital, data, route);
       item.append(button);
       results.append(item);
@@ -419,11 +462,13 @@ function setupHospitalSearch(data){
       unknownList.append(item);
     }
     unknownSection.hidden = unknownList.children.length === 0;
-    const condition = department ? " " + department + " 등록 병원" : "";
+    const parts = [department && department + " 등록", illness && illness + " 가능"].filter(Boolean);
+    const condition = parts.length ? " " + parts.join(" · ") + " 병원" : "";
     status.textContent = (matches.length
       ? "예상 " + maxMinutes + "분 이내" + condition + " " + matches.length + "곳 중 " + topFive.length + "곳 표시"
       : "예상 " + maxMinutes + "분 이내로 확인된" + (condition || " 병원") + "이 없어요.") +
-      (department ? " 현재 응급환자 수용 여부는 병원에 확인해 주세요." : "");
+      (illnessExcluded ? " (" + illness + " 불가 " + illnessExcluded + "곳 제외)" : "") +
+      (department || illness ? " 현재 응급환자 수용 여부는 병원에 확인해 주세요." : "");
     searchRequest = null;
     searchButton.disabled = false;
   });
