@@ -41,7 +41,9 @@ def call(operation, params, service_key, base_url, timeout=20):
         with urllib.request.urlopen(f"{base_url}/{operation}?{query}", timeout=timeout) as response:
             body = response.read()
     except urllib.error.HTTPError as error:
-        return [], f"HTTP {error.code}"
+        # 오류 원인이 응답 본문에 적혀 오는 경우가 있어 앞부분을 함께 보여준다.
+        detail = error.read()[:200].decode("utf-8", "replace").replace("\n", " ").strip()
+        return [], f"HTTP {error.code}" + (f" · {detail}" if detail else "")
     except (urllib.error.URLError, TimeoutError) as error:
         return [], f"연결 실패 ({type(error).__name__})"
     try:
@@ -100,14 +102,21 @@ def main():
 
     for label, operation in REGION_OPERATIONS.items():
         print(f"\n==================== {label} ({operation}) ====================")
-        items, error, region_used = [], None, None
+        items, error, region_used, errors = [], None, None, []
+        # 기능마다 한 번에 받을 수 있는 개수 제한이 다를 수 있어 100, 50 순서로 시도한다.
         for region in REGION_NAMES:
-            items, error = call(operation, {"STAGE1": region, "pageNo": 1, "numOfRows": 200}, service_key, args.base_url)
+            for rows in (100, 50):
+                items, error = call(operation, {"STAGE1": region, "pageNo": 1, "numOfRows": rows}, service_key, args.base_url)
+                if items:
+                    region_used = f"{region} (numOfRows={rows})"
+                    break
+                errors.append(f"{region}/{rows}: {error or '항목 0개'}")
             if items:
-                region_used = region
                 break
         if not items:
-            print(f"  조회 실패 또는 결과 없음: {error or '항목 0개'} (시도: {', '.join(REGION_NAMES)})")
+            print("  조회 실패 또는 결과 없음:")
+            for line in errors:
+                print(f"    {line}")
             saved["operations"][operation] = {"error": error or "no items"}
             continue
 
