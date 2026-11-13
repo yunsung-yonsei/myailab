@@ -15,10 +15,11 @@
 | `frontend/map.js` | 지도 표시, 현재 위치, 병원 목록, 거리·시간 조회 |
 | `frontend/hospital-route-view.js` | 선택 병원 초록 핀 강조, 빨간 내 위치 점 유지, 경로선, 시간·거리 상자 |
 | `frontend/origin-search.js` | 주소를 검색해 출발지로 지정 (서버 `/api/geocode` 사용) |
-| `frontend/realtime.js` | 실시간 가용병상·중증질환 수용 가능 정보 표시 (서버 `/api/realtime` 사용) |
+| `frontend/realtime.js` | 실시간 가용병상·중증질환 수용 가능 정보와 병원 공지(진료 불가·미운영 등) 표시 (서버 `/api/realtime` 사용) |
 | `frontend/symptom-recommend.js` | 증상 기반 추천: AI 증상 분류 → 확인창 → 규칙표로 역량 판정 → 1~5순위 (서버 `/api/symptom/parse`, `/api/rules` 사용) |
 | `data/recommendation_rules.json` | 증상 분류별 필요한 역량과 Pre-KTAS 자리 (임시 분류표 · 자문 전) |
 | `tools/fetch_realtime_sample.py` | 실시간 병상·중증질환 API 응답 항목을 확인하는 샘플 조회 스크립트 |
+| `tools/fetch_messages_sample.py` | 병원이 올린 응급실·중증질환 메시지(공지) 응답을 확인하는 샘플 조회 스크립트 |
 | `data/hospitals.json` | 강원 23개 의료기관의 항목명·값·출처·조회 시점, 등록 진료과목(`departments`) |
 | `tools/refresh_hospitals.py` | 병원 목록을 API로 다시 받아 바뀐 곳(신규·삭제·유형·전화·좌표)을 보여주고 `--write`로 반영, 외상센터 여부 표시 |
 | `tools/eval_symptom.py` | AI 증상 분류를 `tests/symptom_cases.json`(50문장)으로 채점 (12월 평가 "조건 추출 정확도") |

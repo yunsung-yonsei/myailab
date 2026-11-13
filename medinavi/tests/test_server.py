@@ -77,11 +77,14 @@ class Realtime(unittest.TestCase):
     def setUp(self):
         self.app, self.httpx, _ = load_app(EMERGENCY_API_KEY="abc%2Bdef%3D%3D")
         self.mode = "ok"
+        self.messages = {}
 
         def handler(url, headers, params):
             operation = url.rsplit("/", 1)[1]
             if self.mode == "down" or (self.mode == "beds_down" and operation.startswith("getEmrrm")):
                 return 500, "error"
+            if operation == "getEmrrmSrsillDissMsgInqire":
+                return 200, nmc_xml(self.messages.get(params.get("HPID"), []))
             if params.get("STAGE1") != "강원특별자치도":
                 return 200, nmc_xml([])
             if operation == "getEmrrmRltmUsefulSckbdInfoInqire":
@@ -126,6 +129,27 @@ class Realtime(unittest.TestCase):
         self.app.realtime_cache["at"] = -1e9
         self.mode = "down"
         self.assertIsInstance(self.call(), dict, "모두 실패하면 직전 값을 보여줘야 해요")
+
+    def test_notices(self):
+        current = {"symBlkMsgTyp": "응급", "symTypCod": "Y000", "symTypCodMag": "응급실", "trtPrtCodMag": "소아청소년과",
+                   "symBlkMsg": "야간 소아 진료 불가", "symBlkSttDtm": "20000101000000", "symBlkEndDtm": "20991231235900"}
+        self.messages = {
+            "A2200012": [current, {**current, "symBlkMsg": "지난 공지", "symBlkEndDtm": "20010101000000"}],
+            "A2200015": [{"symBlkMsgTyp": "중증", "symTypCod": "Y0032", "symTypCodMag": "뇌출혈수술(거미막하 출혈 외)",
+                          "symBlkMsg": "불가능메세지등록", "symBlkSttDtm": "20000101000000", "symBlkEndDtm": "20991231235900"},
+                         {**current, "symBlkMsg": "응급실 미운영"}],
+        }
+        notices = self.call()["notices"]
+        self.assertEqual([n["text"] for n in notices["A2200012"]], ["야간 소아 진료 불가"], "끝난 공지는 빼야 해요")
+        self.assertEqual(notices["A2200012"][0]["department"], "소아청소년과")
+        self.assertEqual(notices["A2200015"][0]["kind"], "응급실", "응급실 공지를 먼저 보여줘야 해요")
+        self.assertEqual(notices["A2200015"][1]["illness"], "[뇌출혈수술] 거미막하출혈 외")
+        self.assertEqual(notices["A2200015"][1]["text"], "[뇌출혈수술] 거미막하출혈 외 불가")
+        self.assertNotIn("A2200001", notices)
+        count = len(self.httpx.calls)
+        self.app.realtime_cache["at"] = -1e9
+        self.call()
+        self.assertEqual(len(self.httpx.calls), count + 2, "메시지는 5분에 한 번만 새로 불러와야 해요")
 
     def test_no_key_and_no_cache(self):
         app, httpx, _ = load_app()

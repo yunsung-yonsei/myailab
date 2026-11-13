@@ -291,6 +291,23 @@ ILLNESS_FIELDS = [
 realtime_cache = {"at": 0.0, "data": None}
 realtime_lock = asyncio.Lock()
 
+# 병원이 직접 올리는 응급실·중증질환 메시지 (활용가이드 9번). 병원별로만 조회되어 5분에 한 번만 새로 불러온다.
+MESSAGE_OPERATION = "getEmrrmSrsillDissMsgInqire"
+MESSAGE_CACHE_SECONDS = 300
+message_cache = {"at": float("-inf"), "data": {}, "error": None}   # 처음 요청 때 바로 불러오도록
+# 메시지의 중증질환 코드(symTypCod) → 중증질환 항목. 2026-11-13 실제 응답의 이름과 대조했다.
+MESSAGE_ILLNESS_CODES = {
+    "Y0010": "MKioskTy1", "Y0020": "MKioskTy2", "Y0031": "MKioskTy3", "Y0032": "MKioskTy4",
+    "Y0041": "MKioskTy5", "Y0042": "MKioskTy6", "Y0051": "MKioskTy7", "Y0052": "MKioskTy8",
+    "Y0060": "MKioskTy9", "Y0070": "MKioskTy10", "Y0081": "MKioskTy11", "Y0082": "MKioskTy12",
+    "Y0091": "MKioskTy13", "Y0092": "MKioskTy14", "Y0100": "MKioskTy15", "Y0111": "MKioskTy16",
+    "Y0112": "MKioskTy17", "Y0113": "MKioskTy18", "Y0120": "MKioskTy19", "Y0131": "MKioskTy20",
+    "Y0132": "MKioskTy21", "Y0141": "MKioskTy22", "Y0142": "MKioskTy23", "Y0150": "MKioskTy24",
+    "Y0160": "MKioskTy25", "Y0171": "MKioskTy26", "Y0172": "MKioskTy27",
+}
+# 내용 없이 등록만 된 메시지는 항목 이름으로 대신 보여준다.
+EMPTY_MESSAGES = {"", "불가능메세지등록", "불가능메시지등록"}
+
 def status_of(value):
     # Y는 가능, N·N1·불가능은 불가, 정보미제공이나 빈 값은 확인 필요로 묶는다.
     value = (value or "").strip()
@@ -347,6 +364,75 @@ async def fetch_region(client, operation):
         last_error = "강원 기관 없음"
     return {}, last_error
 
+def parse_message_time(value):
+    try:
+        return datetime.strptime((value or "").strip(), "%Y%m%d%H%M%S").replace(tzinfo = KST)
+    except ValueError:
+        return None
+
+def build_notice(fields, now):
+    """메시지 하나를 화면용으로 정리한다. 이미 끝났거나 아직 시작 전이면 None."""
+    start, end = parse_message_time(fields.get("symBlkSttDtm")), parse_message_time(fields.get("symBlkEndDtm"))
+    if (end and end < now) or (start and start > now):
+        return None
+    illness_key = MESSAGE_ILLNESS_CODES.get(fields.get("symTypCod", ""))
+    illness_label = dict(ILLNESS_FIELDS).get(illness_key) if illness_key else None
+    topic = fields.get("symTypCodMag", "")
+    text = fields.get("symBlkMsg", "").strip()
+    if text in EMPTY_MESSAGES:
+        text = (illness_label or topic or "진료") + " 불가"
+    return {
+        "kind": "중증질환" if fields.get("symBlkMsgTyp") == "중증" else "응급실",
+        "topic": topic,
+        "department": fields.get("trtPrtCodMag", ""),
+        "illness": illness_label,
+        "text": text,
+        "start": start.isoformat() if start else None,
+        "end": end.isoformat() if end else None,
+    }
+
+def hospital_ids():
+    try:
+        with DATA_PATH.open("r", encoding = "utf-8-sig") as file:
+            return [item["hpid"] for item in json.load(file)["items"] if item.get("hpid")]
+    except (OSError, KeyError, TypeError, json.JSONDecodeError):
+        return []
+
+async def fetch_messages(client):
+    """병원별 메시지를 조회해 ({기관ID: [원본 항목]}, 오류)를 돌려준다. 일부 병원만 실패해도 나머지는 쓴다."""
+    semaphore = asyncio.Semaphore(6)
+    failures = []
+
+    async def one(hpid):
+        async with semaphore:
+            params = {"serviceKey": EMERGENCY_API_KEY, "HPID": hpid, "pageNo": 1, "numOfRows": 50}
+            try:
+                response = await client.get(f"{EMERGENCY_API_URL}/{MESSAGE_OPERATION}", params = params)
+                root = ET.fromstring(response.content) if response.status_code == 200 else None
+            except (httpx.TimeoutException, httpx.RequestError, ET.ParseError):
+                root = None
+            code = root is not None and (root.findtext(".//resultCode") or root.findtext(".//returnReasonCode"))
+            if root is None or code not in ("00", None):
+                failures.append(hpid)
+                return hpid, None
+            return hpid, [{child.tag: (child.text or "").strip() for child in item} for item in root.iter("item")]
+
+    ids = hospital_ids()
+    results = await asyncio.gather(*(one(hpid) for hpid in ids))
+    raw = {hpid: items for hpid, items in results if items is not None}
+    if ids and not raw:
+        return None, "병원 메시지 조회 실패"
+    return raw, (f"병원 메시지 {len(failures)}곳 조회 실패" if failures else None)
+
+def build_notices(raw, now):
+    notices = {}
+    for hpid, items in raw.items():
+        built = [notice for notice in (build_notice(item, now) for item in items) if notice]
+        if built:
+            # 응급실 전체에 해당하는 공지를 먼저 보여준다.
+            notices[hpid] = sorted(built, key = lambda notice: notice["kind"] != "응급실")
+    return notices
+
 def build_realtime(beds_raw, illness_raw):
     hospitals = {}
     for hpid in set(beds_raw) | set(illness_raw):
@@ -380,11 +466,22 @@ async def get_realtime(request: Request):
         if cached and time.monotonic() - realtime_cache["at"] < REALTIME_CACHE_SECONDS:
             return cached
 
+        refresh_messages = time.monotonic() - message_cache["at"] >= MESSAGE_CACHE_SECONDS
+
+        async def no_refresh():
+            return None, None
+
         async with httpx.AsyncClient(timeout = 15) as client:
-            (beds_raw, beds_error), (illness_raw, illness_error) = await asyncio.gather(
+            (beds_raw, beds_error), (illness_raw, illness_error), (messages_raw, messages_error) = await asyncio.gather(
                 fetch_region(client, "getEmrrmRltmUsefulSckbdInfoInqire"),
                 fetch_region(client, "getSrsillDissAceptncPosblInfoInqire"),
+                fetch_messages(client) if refresh_messages else no_refresh(),
             )
+        if refresh_messages:
+            # 메시지 조회가 모두 실패하면 직전 메시지를 그대로 쓴다.
+            message_cache.update(at = time.monotonic(), error = messages_error)
+            if messages_raw is not None:
+                message_cache["data"] = messages_raw
 
         if not beds_raw and not illness_raw:
             if cached:
@@ -395,8 +492,10 @@ async def get_realtime(request: Request):
         data = {
             "retrieved_at": datetime.now(KST).isoformat(),
             "source": "국립중앙의료원 전국 응급의료기관 정보 조회 서비스",
-            "errors": [message for message in (beds_error and f"가용병상: {beds_error}", illness_error and f"중증질환: {illness_error}") if message],
+            "errors": [message for message in (beds_error and f"가용병상: {beds_error}", illness_error and f"중증질환: {illness_error}", message_cache["error"]) if message],
             "hospitals": build_realtime(beds_raw, illness_raw),
+            # 병원이 직접 올린 공지 중 지금 유효한 것. 확인되지 않은 병원 입력값이며 판정에는 쓰지 않는다.
+            "notices": build_notices(message_cache["data"], datetime.now(KST)),
         }
         realtime_cache.update(at = time.monotonic(), data = data)
         return data

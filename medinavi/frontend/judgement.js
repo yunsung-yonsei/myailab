@@ -32,9 +32,18 @@
     return {status: "확인 필요", detail: "알 수 없는 조건"};
   }
 
+  // 이 조건과 관련된 병원 공지가 있으면 근거에 덧붙인다. 공지는 병원 입력값이라 판정 자체는 바꾸지 않는다.
+  function withNotice(hospital, requirement, result) {
+    const related = (window.medinaviRealtime?.notices?.(hospital.hpid) || []).filter(notice =>
+      (requirement.type === "illness" && notice.illness === requirement.name) ||
+      (requirement.type === "department" && notice.department === requirement.name));
+    if (!related.length) return result;
+    return {...result, detail: result.detail + " · ⚠ 공지: " + related.map(notice => notice.text).join(" / "), notice: true};
+  }
+
   // required: 모두 가능해야 일치 / any: 하나 이상 가능하면 일치 / reference: 판정에 쓰지 않고 근거로만 표시
   function evaluate(hospital, {required = [], any = [], reference = []} = {}) {
-    const check = (list, kind) => list.map(item => ({...item, kind, ...resolve(hospital, item)}));
+    const check = (list, kind) => list.map(item => ({...item, kind, ...withNotice(hospital, item, resolve(hospital, item))}));
     const requiredChecks = check(required, "required");
     const anyChecks = check(any, "any");
     const referenceChecks = check(reference, "reference");

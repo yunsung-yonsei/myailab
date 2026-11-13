@@ -97,6 +97,31 @@
     return info.illness.find(item => item.label === label) || null;
   }
 
+  // 병원이 직접 올린 공지 중 지금 유효한 것 (서버 조회 뒤 끝난 공지는 화면에서도 뺀다)
+  function notices(hpid) {
+    const now = Date.now();
+    return (data?.notices?.[hpid] || []).filter(notice => !notice.end || new Date(notice.end).getTime() >= now);
+  }
+
+  function shorten(text, length = 40) {
+    return text.length > length ? text.slice(0, length - 1) + "…" : text;
+  }
+
+  // 검색 결과 목록에 붙일 공지 한 줄. 응급실 전체 공지가 먼저 온다.
+  function noticeText(hpid) {
+    const list = notices(hpid);
+    if (!list.length) return "";
+    return "⚠ 병원 공지: " + shorten(list[0].text) + (list.length > 1 ? " 외 " + (list.length - 1) + "건" : "");
+  }
+
+  function untilText(iso) {
+    const date = new Date(iso || "");
+    if (!Number.isFinite(date.getTime())) return "";
+    const days = ["일", "월", "화", "수", "목", "금", "토"];
+    const pad = value => String(value).padStart(2, "0");
+    return (date.getMonth() + 1) + "/" + date.getDate() + "(" + days[date.getDay()] + ") " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + "까지";
+  }
+
   function heading(text) {
     const element = document.createElement("h4");
     element.textContent = text;
@@ -152,6 +177,21 @@
       if (!error) refresh();
       return;
     }
+    const hospitalNotices = notices(hospital.hpid);
+    if (hospitalNotices.length) {
+      body.append(heading("병원 공지 (병원이 직접 올린 내용 · " + hospitalNotices.length + "건)"));
+      const list = document.createElement("ul");
+      list.className = "realtime-notices";
+      for (const notice of hospitalNotices) {
+        const item = document.createElement("li");
+        const about = notice.department || (notice.kind === "중증질환" ? notice.illness || notice.topic : "응급실");
+        const strong = document.createElement("strong");
+        strong.textContent = "[" + about + "] ";
+        item.append(strong, notice.text + (notice.end ? " · " + untilText(notice.end) : ""));
+        list.append(item);
+      }
+      body.append(list);
+    }
     const info = data.hospitals?.[hospital.hpid];
     if (!info) {
       meta.textContent = "이 기관은 실시간 정보를 제공하지 않아요. 병원에 직접 확인해 주세요.";
@@ -175,7 +215,7 @@
     }
   }
 
-  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, equipmentStatus, bedAvailable, renderDetail};
+  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, equipmentStatus, bedAvailable, notices, noticeText, renderDetail};
   refresh();
   // 화면을 보고 있는 동안에는 2분마다 새로 불러온다.
   setInterval(() => {

@@ -48,7 +48,17 @@ function realtimeResponse(items, {minutesAgo = 4} = {}) {
       illness: index === 5 ? [] : illness,
     };
   });
-  return {retrieved_at: updated, source: "시험", errors: [], hospitals};
+  // 심근경색 '가능' 병원에는 관련 공지 1건과 이미 끝난 공지 1건을 붙인다.
+  const notices = {};
+  items.forEach((item, index) => {
+    if (index === 2 || index % 3) return;
+    notices[item.hpid] = [
+      {kind: "중증질환", topic: "심근경색의 재관류중재술", department: "", illness: ILLNESS[0], text: "심장내과 사정으로 CAG 불가능",
+       start: updated, end: new Date(Date.now() + 3600000).toISOString()},
+      {kind: "응급실", topic: "응급실", department: "", illness: null, text: "끝난 공지", start: updated, end: new Date(Date.now() - 60000).toISOString()},
+    ];
+  });
+  return {retrieved_at: updated, source: "시험", errors: [], hospitals, notices};
 }
 
 function createPage({symptom = null, realtimeFails = false, geocode = null} = {}) {
@@ -191,12 +201,32 @@ test("조건 검색: 중증질환 불일치는 제외, 결과에 '병원 입력'
   const {els} = page;
   els["hospital-type"].value = "지역응급의료기관"; els.illness.value = "[재관류중재술] 심근경색"; els["max-minutes"].value = "300";
   await els["hospital-search"].fire("submit");
-  assert.ok(lines(page).every(text => text.includes("[재관류중재술] 심근경색 일치(가능 · 병원 입력)")));
+  assert.ok(lines(page).every(text => text.includes("[재관류중재술] 심근경색 일치(가능 · 병원 입력")));
   assert.match(els["search-status"].textContent, /심근경색 불일치 \d+곳/);
   els["max-minutes"].value = "1";
   await els["hospital-search"].fire("submit");
   assert.strictEqual(lines(page).length, 0);
   assert.match(els["search-status"].textContent, /\[지역응급의료기관 \d+곳 → 조건 일치 \d+곳 → 1분 이내 0곳/);
+});
+
+test("병원 공지: 목록에 한 줄, 관련 조건 근거에 덧붙임, 끝난 공지는 숨김, 상세에 기간", async () => {
+  const page = createPage(); await start(page);
+  const {els} = page;
+  els["hospital-type"].value = "지역응급의료기관"; els.illness.value = "[재관류중재술] 심근경색"; els["max-minutes"].value = "300";
+  await els["hospital-search"].fire("submit");
+  const results = lines(page);
+  assert.ok(results.length > 0);
+  for (const text of results) {
+    assert.match(text, /심근경색 일치\(가능 · 병원 입력 · ⚠ 공지: 심장내과 사정으로 CAG 불가능\)/);
+    assert.match(text, /\n⚠ 병원 공지: 심장내과 사정으로 CAG 불가능$/, "끝난 공지는 세지 않아야 해요");
+  }
+  const hospital = page.hospitals.items[0];
+  page.run(`window.medinaviRealtime.renderDetail(${JSON.stringify(hospital)})`);
+  const body = els["realtime-body"].children;
+  assert.match(body[0].textContent, /병원 공지 \(병원이 직접 올린 내용 · 1건\)/);
+  const item = body[1].children[0];
+  assert.strictEqual(item.children[0].textContent, "[[재관류중재술] 심근경색] ");
+  assert.match(item.textContent, /CAG 불가능 · \d+\/\d+\(.\) \d\d:\d\d까지/);
 });
 
 test("실시간: 가용/전체와 혼잡도 색, 포화·대기", async () => {

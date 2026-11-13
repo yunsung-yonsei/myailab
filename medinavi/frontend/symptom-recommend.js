@@ -128,6 +128,9 @@
       if (reference.length) text += "\n참고: " + reference.map(checkText).join(" · ");
       const realtimeText = window.medinaviRealtime?.summary(hospital.hpid);
       if (realtimeText) text += "\n" + realtimeText;
+      // 병원이 직접 올린 공지(진료 불가·미운영 등)가 있으면 한 줄로 알린다.
+      const noticeText = window.medinaviRealtime?.noticeText?.(hospital.hpid);
+      if (noticeText) text += "\n" + noticeText;
       choice.textContent = text;
       const congestion = window.medinaviRealtime?.level(hospital.hpid);
       if (congestion) choice.dataset.congestion = congestion;
