@@ -1,0 +1,305 @@
+{
+ "description": "AI 증상 분류 시험 문장 (임시 분류표 draft-2026-11-12 기준). 정답은 팀이 정한 임시 기준이며 자문 후 함께 검토한다. 가상의 상황이며 실제 환자 정보가 아니다.",
+ "cases": [
+  {
+   "id": 1,
+   "text": "60대 남성, 30분 전부터 가슴을 쥐어짜는 통증과 식은땀",
+   "expected_category": "cardiac",
+   "expected_is_child": false
+  },
+  {
+   "id": 2,
+   "text": "가슴이 답답하고 왼쪽 팔까지 저려요",
+   "expected_category": "cardiac",
+   "expected_is_child": null
+  },
+  {
+   "id": 3,
+   "text": "흉통이 20분째 계속됨, 고혈압 병력 있음",
+   "expected_category": "cardiac",
+   "expected_is_child": null
+  },
+  {
+   "id": 4,
+   "text": "운동하다가 갑자기 가슴 통증이 생겼어요",
+   "expected_category": "cardiac",
+   "expected_is_child": null
+  },
+  {
+   "id": 5,
+   "text": "70대 여성 가슴 압박감과 식은땀",
+   "expected_category": "cardiac",
+   "expected_is_child": false
+  },
+  {
+   "id": 6,
+   "text": "심장이 쥐어짜듯 아프고 식은땀이 나요",
+   "expected_category": "cardiac",
+   "expected_is_child": null
+  },
+  {
+   "id": 7,
+   "text": "갑자기 오른쪽 팔다리에 힘이 빠지고 말이 어눌해요",
+   "expected_category": "stroke",
+   "expected_is_child": null
+  },
+  {
+   "id": 8,
+   "text": "아침에 일어나니 얼굴 한쪽이 처지고 발음이 이상함",
+   "expected_category": "stroke",
+   "expected_is_child": null
+  },
+  {
+   "id": 9,
+   "text": "80대 남성, 1시간 전부터 왼쪽 팔다리 마비",
+   "expected_category": "stroke",
+   "expected_is_child": false
+  },
+  {
+   "id": 10,
+   "text": "말을 잘 못 알아듣고 한쪽 팔을 못 들어요",
+   "expected_category": "stroke",
+   "expected_is_child": null
+  },
+  {
+   "id": 11,
+   "text": "갑자기 인생 최악의 두통이 생기고 구토",
+   "expected_category": "stroke",
+   "expected_is_child": null
+  },
+  {
+   "id": 12,
+   "text": "교통사고로 차량에 끼였다가 구조됨, 다리가 변형됨",
+   "expected_category": "trauma",
+   "expected_is_child": null
+  },
+  {
+   "id": 13,
+   "text": "공사장 3층 높이에서 추락",
+   "expected_category": "trauma",
+   "expected_is_child": null
+  },
+  {
+   "id": 14,
+   "text": "오토바이 사고 후 의식이 흐려짐",
+   "expected_category": "trauma",
+   "expected_is_child": null
+  },
+  {
+   "id": 15,
+   "text": "칼에 찔려 복부 출혈이 심함",
+   "expected_category": "trauma",
+   "expected_is_child": null
+  },
+  {
+   "id": 16,
+   "text": "계단에서 굴러 머리를 다쳤고 피가 많이 남",
+   "expected_category": "trauma",
+   "expected_is_child": null
+  },
+  {
+   "id": 17,
+   "text": "높은 곳에서 떨어져 허리를 움직이지 못함",
+   "expected_category": "trauma",
+   "expected_is_child": null
+  },
+  {
+   "id": 18,
+   "text": "5살 아이가 39도 고열이 나고 경련을 했어요",
+   "expected_category": "pediatric",
+   "expected_is_child": true
+  },
+  {
+   "id": 19,
+   "text": "생후 8개월 아기가 열이 나고 계속 처져 있어요",
+   "expected_category": "pediatric",
+   "expected_is_child": true
+  },
+  {
+   "id": 20,
+   "text": "10살 남자아이가 숨쉬기 힘들어하고 쌕쌕거림",
+   "expected_category": "pediatric",
+   "expected_is_child": true
+  },
+  {
+   "id": 21,
+   "text": "3살 아이가 열경련 후 잘 깨지 않아요",
+   "expected_category": "pediatric",
+   "expected_is_child": true
+  },
+  {
+   "id": 22,
+   "text": "초등학생 아이가 고열과 발진이 있어요",
+   "expected_category": "pediatric",
+   "expected_is_child": true
+  },
+  {
+   "id": 23,
+   "text": "임신 38주, 양수가 터졌어요",
+   "expected_category": "obstetric",
+   "expected_is_child": null
+  },
+  {
+   "id": 24,
+   "text": "임신 32주인데 진통이 5분 간격으로 와요",
+   "expected_category": "obstetric",
+   "expected_is_child": null
+  },
+  {
+   "id": 25,
+   "text": "임신 중 갑자기 질 출혈이 많아요",
+   "expected_category": "obstetric",
+   "expected_is_child": null
+  },
+  {
+   "id": 26,
+   "text": "산모가 집에서 분만이 시작됐어요",
+   "expected_category": "obstetric",
+   "expected_is_child": null
+  },
+  {
+   "id": 27,
+   "text": "임신 36주 산모가 배가 뭉치고 진통이 있어요",
+   "expected_category": "obstetric",
+   "expected_is_child": null
+  },
+  {
+   "id": 28,
+   "text": "뜨거운 기름에 팔과 가슴을 데었어요",
+   "expected_category": "burn",
+   "expected_is_child": null
+  },
+  {
+   "id": 29,
+   "text": "화재 현장에서 구조된 사람이 전신 화상",
+   "expected_category": "burn",
+   "expected_is_child": null
+  },
+  {
+   "id": 30,
+   "text": "6살 아이가 끓는 물에 다리를 데었어요",
+   "expected_category": "burn",
+   "expected_is_child": true
+  },
+  {
+   "id": 31,
+   "text": "전기에 감전돼서 손에 화상을 입음",
+   "expected_category": "burn",
+   "expected_is_child": null
+  },
+  {
+   "id": 32,
+   "text": "얼굴과 목에 화상, 물집이 크게 잡힘",
+   "expected_category": "burn",
+   "expected_is_child": null
+  },
+  {
+   "id": 33,
+   "text": "공장 기계에 손가락이 끼어 절단됨",
+   "expected_category": "amputation",
+   "expected_is_child": null
+  },
+  {
+   "id": 34,
+   "text": "전기톱에 손목이 거의 잘림",
+   "expected_category": "amputation",
+   "expected_is_child": null
+  },
+  {
+   "id": 35,
+   "text": "문틈에 끼어 손가락 끝이 떨어져 나감",
+   "expected_category": "amputation",
+   "expected_is_child": null
+  },
+  {
+   "id": 36,
+   "text": "사고로 발가락 두 개가 절단됨",
+   "expected_category": "amputation",
+   "expected_is_child": null
+  },
+  {
+   "id": 37,
+   "text": "자해를 하겠다며 흥분한 상태로 소리를 지름",
+   "expected_category": "psychiatric",
+   "expected_is_child": null
+  },
+  {
+   "id": 38,
+   "text": "환청이 들린다며 심하게 불안해하고 소리를 지름",
+   "expected_category": "psychiatric",
+   "expected_is_child": null
+  },
+  {
+   "id": 39,
+   "text": "극도로 흥분해서 가족을 위협하고 있어요",
+   "expected_category": "psychiatric",
+   "expected_is_child": null
+  },
+  {
+   "id": 40,
+   "text": "갑자기 이상한 말을 하며 사람을 알아보지 못하고 난폭해짐",
+   "expected_category": "psychiatric",
+   "expected_is_child": null
+  },
+  {
+   "id": 41,
+   "text": "심한 복통과 함께 피를 토했어요",
+   "expected_category": "abdominal",
+   "expected_is_child": null
+  },
+  {
+   "id": 42,
+   "text": "검은 변을 보고 어지러워요",
+   "expected_category": "abdominal",
+   "expected_is_child": null
+  },
+  {
+   "id": 43,
+   "text": "오른쪽 아랫배가 너무 아프고 열이 남",
+   "expected_category": "abdominal",
+   "expected_is_child": null
+  },
+  {
+   "id": 44,
+   "text": "명치가 찢어질 듯 아프고 배가 딱딱함",
+   "expected_category": "abdominal",
+   "expected_is_child": null
+  },
+  {
+   "id": 45,
+   "text": "50대 남성, 갑자기 배 전체가 아프고 구토",
+   "expected_category": "abdominal",
+   "expected_is_child": false
+  },
+  {
+   "id": 46,
+   "text": "어지러워요",
+   "expected_category": "unclear",
+   "expected_is_child": null
+  },
+  {
+   "id": 47,
+   "text": "기운이 없고 몸이 안 좋아요",
+   "expected_category": "unclear",
+   "expected_is_child": null
+  },
+  {
+   "id": 48,
+   "text": "가슴이 아프고 한쪽 팔다리에 힘이 빠져요",
+   "expected_category": "unclear",
+   "expected_is_child": null
+  },
+  {
+   "id": 49,
+   "text": "열이 나요",
+   "expected_category": "unclear",
+   "expected_is_child": null
+  },
+  {
+   "id": 50,
+   "text": "숨이 차요",
+   "expected_category": "unclear",
+   "expected_is_child": null
+  }
+ ]
+}

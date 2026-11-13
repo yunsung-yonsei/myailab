@@ -2,7 +2,7 @@
   "version": "draft-2026-11-12",
   "status": "임시 분류표 · 자문 전",
   "notice": "참고용 정보예요. 증상 분류와 필요한 역량 연결은 팀이 만든 임시 기준이며, 최종 판단은 구급대원·의료진이 해야 해요.",
-  "how_to_edit": "자문 결과에 따라 categories의 required(모두 가능해야 추천), required_any(하나 이상 가능하면 추천), reference(판정에는 쓰지 않고 근거로만 표시)를 고치고, pre_ktas.enabled를 true로 바꾼 뒤 levels에 등급별 기관 유형을 채우면 됩니다. 이름은 /api/realtime의 항목 이름(활용가이드 V13)과 hospitals.json의 진료과목 이름을 그대로 씁니다.",
+  "how_to_edit": "자문 결과에 따라 categories의 required(모두 가능해야 추천), required_any(하나 이상 가능하면 추천), reference(판정에는 쓰지 않고 근거로만 표시)를 고치고, 소아일 때 모든 분류에 더할 필수 조건은 child_required에 넣고, pre_ktas.enabled를 true로 바꾼 뒤 levels에 등급별 기관 유형을 채우면 됩니다. 이름은 /api/realtime의 항목 이름(활용가이드 V13)과 hospitals.json의 진료과목 이름을 그대로 씁니다.",
   "categories": [
     {
       "id": "cardiac",
@@ -114,6 +114,7 @@
       "note": "필요한 역량을 정하지 않고 이동시간순으로 보여줘요."
     }
   ],
+  "child_required": [],
   "child_reference": [
     {"type": "department", "name": "소아청소년과"},
     {"type": "bed", "name": "응급실 소아"}

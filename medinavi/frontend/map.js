@@ -80,7 +80,7 @@ async function showHospitalRoute(hospital, savedRoute = null) {
   const distanceKm = (distance_m / 1000).toFixed(1);
   const minutes = Math.ceil(duration_ms / 60000);
   const originText = currentLocation.label ? "출발지(" + currentLocation.label + ")" : "내 위치";
-  routeInfo.textContent = `${originText} 기준 · 자동차 이동거리 ${distanceKm}km · 예상 ${minutes}분`;
+  routeInfo.textContent = `${originText} 기준 · 일반 자동차 기준 참고값 · 이동거리 ${distanceKm}km · 예상 ${minutes}분`;
   } catch (error) {
     if (!controller.signal.aborted) {
       routeInfo.textContent = httpStatus === null ? `이동정보 서버에 연결하지 못했어요. (${error.name})`: `이동정보 응답 처리 오류 (HTTP ${httpStatus}) · ${error.message}`;
@@ -383,99 +383,84 @@ function setupHospitalSearch(data){
     }
     const maxMinutes = minuteInput.valueAsNumber;
     const department = departmentSelect.value;
-    const typeMatched = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
-    // 추가: 진료과목을 골랐으면 길찾기 전에 등록된 병원만 남긴다. 자료가 비어 있는 병원은 따로 안내한다.
-    const deptMatched = department ? typeMatched.filter(hospital => (hospital.departments || []).includes(department)) : typeMatched;
-    const deptUnknown = department ? typeMatched.filter(hospital => !(hospital.departments || []).length) : [];
-    for (const hospital of deptUnknown) {
-      const item = document.createElement("li");
-      item.textContent = hospital.dutyName || "기관명 확인 필요";
-      deptUnknownList.append(item);
-    }
-    deptUnknownSection.hidden = deptUnknown.length === 0;
+    const illness = illnessSelect.value;
     const controller = new AbortController();
     searchRequest = controller;
     searchButton.disabled = true;
-    // 추가: 중증질환을 골랐으면 실시간 정보에서 '가능'인 병원만 길찾기한다.
-    // '불가'는 제외한 수만 알리고, 정보미제공·실시간 정보 없음은 따로 목록에 보여준다.
-    const illness = illnessSelect.value;
-    let candidates = deptMatched;
-    let illnessExcluded = 0;
     if (illness) {
       status.textContent = "실시간 중증질환 정보를 확인하고 있어요.";
       await window.medinaviRealtime?.refresh();
       if (controller.signal.aborted) return;
-      const loaded = Boolean(window.medinaviRealtime?.isLoaded());
-      candidates = [];
-      for (const hospital of deptMatched) {
-        const info = loaded ? window.medinaviRealtime.illnessStatus(hospital.hpid, illness) : null;
-        if (info?.status === "가능") {
-          candidates.push(hospital);
-        } else if (info?.status === "불가") {
-          illnessExcluded += 1;
-        } else {
-          const item = document.createElement("li");
-          item.textContent = (hospital.dutyName || "기관명 확인 필요") + " (" +
-            (!loaded ? "실시간 정보를 불러오지 못함" : info ? "병원 정보미제공" : "실시간 정보 없음") + ")";
-          illUnknownList.append(item);
-        }
-      }
-      illUnknownSection.hidden = illUnknownList.children.length === 0;
     }
+    // 진료과목·중증질환 조건을 공통 판정(judgement.js)으로 확인한다.
+    // 불일치는 제외하고, 확인 필요는 이동시간과 함께 따로 보여준다.
+    const judge = window.medinaviJudge;
+    const required = [department && {type: "department", name: department}, illness && {type: "illness", name: illness}].filter(Boolean);
+    const typeMatched = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
+    const evaluated = typeMatched.map(hospital => ({hospital, ...judge.evaluate(hospital, {required})}));
+    const mismatched = evaluated.filter(entry => entry.verdict === "불일치");
     status.textContent = "병원별 예상 이동시간을 조회하고 있어요.";
-    const lookedUp = [];
-    const batchSize = 4;
-    for (let index = 0; index < candidates.length; index +=batchSize){
-      const batch = candidates.slice(index, index + batchSize);
-      const entries = await Promise.all(batch.map(hospital => lookupRoute(hospital, origin, controller.signal)));
-      if (controller.signal.aborted) return;
-      lookedUp.push(...entries);
-    }
-    const matches = lookedUp.filter(({route}) => route && route.duration_ms <= maxMinutes * 60000).sort((a, b) => a.route.duration_ms - b.route.duration_ms);
+    const routed = await judge.lookupRoutes(evaluated.filter(entry => entry.verdict !== "불일치"), origin, controller.signal, lookupRoute);
+    if (!routed) return;
+    const within = routed.filter(({route}) => route && route.duration_ms <= maxMinutes * 60000).sort((a, b) => a.route.duration_ms - b.route.duration_ms);
+    const matches = within.filter(entry => entry.verdict === "일치");
+    const unknown = within.filter(entry => entry.verdict === "확인 필요");
     const topFive = matches.slice(0, 5);
-    // 추가: 결과에 붙일 실시간 병상 정보를 최신으로 맞춘다. (2분 안에 받은 값은 그대로 사용)
+    // 결과에 붙일 실시간 병상 정보를 최신으로 맞춘다. (2분 안에 받은 값은 그대로 사용)
     await window.medinaviRealtime?.refresh();
     if (controller.signal.aborted) return;
-    topFive.forEach(({hospital, route}, index) => {
+    topFive.forEach(({hospital, route, checks}, index) => {
       const item = document.createElement("li");
       const button = document.createElement("button");
       button.type = "button";
-      // 추가: 지도 핀과 같은 순번을 붙이고, 강조할 때 찾을 수 있도록 기관 ID를 남긴다.
+      // 지도 핀과 같은 순번을 붙이고, 강조할 때 찾을 수 있도록 기관 ID를 남긴다.
       button.dataset.hpid = hospital.hpid;
       const minutes = Math.ceil(route.duration_ms / 60000);
       const distance = (route.distance_m / 1000).toFixed(1);
-      button.textContent = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km" +
-        (department ? "\n" + department + " 등록 확인 · 현재 수용 여부 확인 필요" : "");
-      // 추가: 중증질환 조건을 골랐으면 병원이 입력한 '가능' 정보와 조건 메모를 보여준다.
-      if (illness) {
-        const note = window.medinaviRealtime?.illnessStatus(hospital.hpid, illness)?.note;
-        button.textContent += "\n" + illness + " 가능(병원 입력)" + (note ? " · " + note : "");
-      }
-      // 추가: 응급실 실시간 가용병상 한 줄 요약
+      button.textContent = (index + 1) + ". " + hospital.dutyName + " (" + (hospital.dutyEmclsName || "구분 확인 필요") + ") · 약 " + minutes + "분 · " + distance + "km";
+      if (checks.length) button.textContent += "\n조건: " + checks.map(judge.checkText).join(" · ");
+      // 응급실 실시간 가용병상 한 줄 요약과 혼잡도 색 띠
       const realtimeText = window.medinaviRealtime?.summary(hospital.hpid);
       if (realtimeText) button.textContent += "\n" + realtimeText;
-      // 추가: 응급실 혼잡도에 따라 결과 왼쪽에 색 띠를 표시한다. (글자로도 함께 표시)
       const congestion = window.medinaviRealtime?.level(hospital.hpid);
       if (congestion) button.dataset.congestion = congestion;
       button.onclick = () => showHospitalDetail(hospital, data, route);
       item.append(button);
       results.append(item);
     });
-    // 추가: 결과를 지도에 1~5번 핀으로 표시한다. 결과가 없으면 기존 지도를 유지한다.
+    // 결과를 지도에 1~5번 핀으로 표시한다. 결과가 없으면 기존 지도를 유지한다.
     window.hospitalRouteView?.showSearchResults(topFive);
-    for (const {hospital, route} of lookedUp) {
+    // 확인 필요: 진료과목 자료가 없으면 진료과목 목록, 그 외(중증질환 정보미제공 등)는 중증질환 목록에 이동시간과 함께 보여준다.
+    for (const {hospital, route, checks} of unknown) {
+      const item = document.createElement("li");
+      const reasons = checks.filter(check => check.status !== "가능");
+      item.textContent = hospital.dutyName + " · 약 " + Math.ceil(route.duration_ms / 60000) + "분 — " + reasons.map(judge.checkText).join(", ");
+      (reasons.some(check => check.type === "department") ? deptUnknownList : illUnknownList).append(item);
+    }
+    deptUnknownSection.hidden = deptUnknownList.children.length === 0;
+    illUnknownSection.hidden = illUnknownList.children.length === 0;
+    for (const {hospital, route} of routed) {
       if (route) continue;
       const item = document.createElement("li");
       item.textContent = hospital.dutyName || "기관명 확인 필요";
       unknownList.append(item);
     }
     unknownSection.hidden = unknownList.children.length === 0;
-    const parts = [department && department + " 등록", illness && illness + " 가능"].filter(Boolean);
+    const parts = [department && department + " 일치", illness && illness + " 일치"].filter(Boolean);
     const condition = parts.length ? " " + parts.join(" · ") + " 병원" : "";
+    // 조건별로 불일치해 제외된 병원 수 (예: 소아청소년과 미등록 3곳)
+    const excludedText = required.map(requirement => {
+      const count = mismatched.filter(entry => entry.checks.some(check => check.name === requirement.name && check.status === "불가")).length;
+      return count ? requirement.name + " 불일치 " + count + "곳" : "";
+    }).filter(Boolean).join(", ");
     status.textContent = (matches.length
       ? "예상 " + maxMinutes + "분 이내" + condition + " " + matches.length + "곳 중 " + topFive.length + "곳 표시"
       : "예상 " + maxMinutes + "분 이내로 확인된" + (condition || " 병원") + "이 없어요.") +
-      (illnessExcluded ? " (" + illness + " 불가 " + illnessExcluded + "곳 제외)" : "") +
+      (excludedText ? " (제외: " + excludedText + ")" : "") +
+      // 결과가 없으면 어디서 줄었는지 단계별로 알려준다.
+      (matches.length ? "" : " [" + typeSelect.value + " " + typeMatched.length + "곳 → 조건 일치 " + routed.filter(e => e.verdict === "일치").length +
+        "곳 → " + maxMinutes + "분 이내 0곳 · 확인 필요 " + unknown.length + "곳]") +
+      " 예상 시간은 일반 자동차 기준 참고값이에요." +
       (department || illness ? " 현재 응급환자 수용 여부는 병원에 확인해 주세요." : "");
     searchRequest = null;
     searchButton.disabled = false;

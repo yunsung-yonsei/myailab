@@ -5,12 +5,13 @@ import os
 import time
 import urllib.parse
 import xml.etree.ElementTree as ET
+from collections import OrderedDict, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -75,8 +76,39 @@ def get_hospitals():
 
 DIRECTIONS_URL = "https://maps.apigw.ntruss.com/map-direction/v1/driving"
 
+# ---------------------------------------------------------------------------
+# 호출 제한: 누구나 부를 수 있는 API(AI·주소 검색·길찾기·실시간)를 IP별 1분 호출 수로 제한해
+# 요금과 공공 API 한도 소진을 막는다. 서버 메모리에만 두며 서버가 다시 켜지면 초기화된다.
+# ---------------------------------------------------------------------------
+RATE_LIMITS = {"route": 120, "geocode": 20, "symptom": 10, "realtime": 30}   # 분당 허용 횟수 (조건 검색 1회에 길찾기 최대 23번)
+rate_history = {}
+
+def client_ip(request):
+    # Render는 프록시 뒤에서 실행되므로 실제 접속 IP는 X-Forwarded-For의 첫 값이다.
+    forwarded = request.headers.get("x-forwarded-for", "")
+    return forwarded.split(",")[0].strip() or (request.client.host if request.client else "unknown")
+
+def check_rate(request, bucket):
+    now = time.monotonic()
+    history = rate_history.setdefault((bucket, client_ip(request)), deque())
+    while history and now - history[0] > 60:
+        history.popleft()
+    if len(history) >= RATE_LIMITS[bucket]:
+        raise HTTPException(429, "요청이 너무 많아요. 잠시 후 다시 시도해 주세요.")
+    history.append(now)
+    if len(rate_history) > 5000:
+        # 오래 쓰지 않은 기록은 지워 메모리가 계속 늘지 않게 한다.
+        for key in [key for key, value in rate_history.items() if not value or now - value[-1] > 60]:
+            rate_history.pop(key, None)
+
+# 길찾기 결과 저장: 같은 출발지(약 10m 단위)에서 같은 병원으로 가는 결과는 5분 동안 다시 쓴다.
+ROUTE_CACHE_SECONDS = 300
+ROUTE_CACHE_MAX = 2000
+route_cache = OrderedDict()
+
 @app.get("/api/route")
-async def get_route(hospital_id: str, start_lat: float = Query(..., ge = -90, le = 90), start_lon: float = Query(..., ge = -180, le = 180)):
+async def get_route(request: Request, hospital_id: str, start_lat: float = Query(..., ge = -90, le = 90), start_lon: float = Query(..., ge = -180, le = 180)):
+    check_rate(request, "route")
 
     # 기존 병원 목록 기능에서 데이터를 읽음
 
@@ -98,6 +130,11 @@ async def get_route(hospital_id: str, start_lat: float = Query(..., ge = -90, le
 
     if not(math.isfinite(goal_lat) and math.isfinite(goal_lon) and -90 <= goal_lat <= 90 and -180 <= goal_lon <= 180):
         raise HTTPException(status_code = 422, detail = "의료기관 좌표가 유효한 범위를 벗어났습니다.",)
+
+    cache_key = (hospital_id, round(start_lat, 4), round(start_lon, 4))
+    cached = route_cache.get(cache_key)
+    if cached and time.monotonic() - cached[0] < ROUTE_CACHE_SECONDS:
+        return {**cached[1], "cached": True}
 
     # 성공한 진단 셀과 같은 방식으로 요청
 
@@ -144,15 +181,22 @@ async def get_route(hospital_id: str, start_lat: float = Query(..., ge = -90, le
         route = data["route"]["trafast"][0]
         summary = route["summary"]
 
-        return {"hospital_id": hospital_id, "hospital_name": hospital.get("dutyName"), "distance_m": summary["distance"], "duration_ms": summary["duration"],
-                "path": route["path"], "route_options": "trafast", "source": "NAVER Maps Direction 5", "queried_at": datetime.now(timezone.utc).isoformat(),}
+        result = {"hospital_id": hospital_id, "hospital_name": hospital.get("dutyName"), "distance_m": summary["distance"], "duration_ms": summary["duration"],
+                  "path": route["path"], "route_options": "trafast", "source": "NAVER Maps Direction 5", "queried_at": datetime.now(timezone.utc).isoformat(),}
 
     except (KeyError, IndexError, TypeError):
         raise HTTPException(status_code = 502, detail = "길찾기 결과에 필요한 정보가 없습니다.") from None
+
+    route_cache[cache_key] = (time.monotonic(), result)
+    route_cache.move_to_end(cache_key)
+    while len(route_cache) > ROUTE_CACHE_MAX:
+        route_cache.popitem(last = False)
+    return result
 GEOCODE_URL = "https://maps.apigw.ntruss.com/map-geocode/v2/geocode"
 
 @app.get("/api/geocode")
-async def geocode(query: str = Query(..., min_length = 1, max_length = 100)):
+async def geocode(request: Request, query: str = Query(..., min_length = 1, max_length = 100)):
+    check_rate(request, "geocode")
     # 입력한 주소를 좌표로 바꿔 출발지 후보를 돌려준다. 주소는 로그에 남기지 않는다.
     query = query.strip()
     if not query:
@@ -325,7 +369,8 @@ def build_realtime(beds_raw, illness_raw):
     return hospitals
 
 @app.get("/api/realtime")
-async def get_realtime():
+async def get_realtime(request: Request):
+    check_rate(request, "realtime")
     # 강원 응급의료기관의 실시간 가용병상·중증질환 수용 가능 정보. 실제 수용 가능 여부를 뜻하지 않는다.
     if not EMERGENCY_API_KEY:
         raise HTTPException(503, "실시간 병상 정보가 아직 설정되지 않았어요. (EMERGENCY_API_KEY)")
@@ -380,7 +425,8 @@ class SymptomClassification(BaseModel):
     max_minutes: int | None
 
 @app.post("/api/symptom/parse", response_model = SymptomClassification)
-async def parse_symptom(body: SymptomRequest):
+async def parse_symptom(request: Request, body: SymptomRequest):
+    check_rate(request, "symptom")
     query = body.query.strip()
     if not query:
         raise HTTPException(422, "환자 상태나 증상을 입력해주세요.")

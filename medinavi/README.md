@@ -11,6 +11,7 @@
 | --- | --- |
 | `app.py` | 화면·병원 데이터를 전달하고 네이버 자동차 길찾기를 요청하는 FastAPI 서버 |
 | `frontend/index.html` | 지도·병원 목록·상세정보 화면과 모바일 스타일 |
+| `frontend/judgement.js` | 조건 검색과 증상 추천이 함께 쓰는 판정(일치 / 불일치 / 확인 필요)과 길찾기 묶음 조회 |
 | `frontend/map.js` | 지도 표시, 현재 위치, 병원 목록, 거리·시간 조회 |
 | `frontend/hospital-route-view.js` | 선택 병원 초록 핀 강조, 빨간 내 위치 점 유지, 경로선, 시간·거리 상자 |
 | `frontend/origin-search.js` | 주소를 검색해 출발지로 지정 (서버 `/api/geocode` 사용) |
@@ -19,6 +20,9 @@
 | `data/recommendation_rules.json` | 증상 분류별 필요한 역량과 Pre-KTAS 자리 (임시 분류표 · 자문 전) |
 | `tools/fetch_realtime_sample.py` | 실시간 병상·중증질환 API 응답 항목을 확인하는 샘플 조회 스크립트 |
 | `data/hospitals.json` | 강원 23개 의료기관의 항목명·값·출처·조회 시점, 등록 진료과목(`departments`) |
+| `tools/refresh_hospitals.py` | 병원 목록을 API로 다시 받아 바뀐 곳(신규·삭제·유형·전화·좌표)을 보여주고 `--write`로 반영, 외상센터 여부 표시 |
+| `tools/eval_symptom.py` | AI 증상 분류를 `tests/symptom_cases.json`(50문장)으로 채점 (12월 평가 "조건 추출 정확도") |
+| `tests/` | 자동 시험: 서버 단위 시험(`test_server.py`), 화면 시나리오 시험(`js/frontend.test.js`), 시험용 가짜 모듈(`stubs/`) |
 | `tools/fetch_departments.py` | 기관 ID로 국립중앙의료원 기본정보를 조회해 등록 진료과목을 `hospitals.json`에 합치는 스크립트 |
 | `requirements.txt` | 서버 실행에 필요한 Python 라이브러리 |
 | `.env.example` | 실제 인증정보가 없는 환경변수 입력 양식 |
@@ -50,9 +54,31 @@ Render 대시보드의 **medinavi** 서비스 → **Settings**에 다음 값이 
 - 네이버 Maps 애플리케이션에서 **Web Dynamic Map**, **Directions 5**, **Geocoding**(출발지 주소 검색)을 사용할 수 있어야 합니다.
 - 네이버 Maps의 Web 서비스 URL에 `https://medinavi.onrender.com`(로컬 시험 시 `http://localhost:8000`)이 등록되어야 지도가 열립니다.
 - 웹 지도는 `frontend/index.html`의 공개 Client ID를 사용합니다. Render 환경변수의 인증정보도 같은 Maps 애플리케이션 것이어야 합니다.
-- Render 무료 인스턴스는 한동안 접속이 없으면 잠들어, 첫 접속이 30초~1분 정도 느릴 수 있습니다.
+- Render 무료 인스턴스는 한동안 접속이 없으면 잠들어, 첫 접속이 30초~1분 정도 느릴 수 있습니다. 잠들면 실시간 정보 저장분과 호출 제한 기록도 초기화됩니다. **발표·시연 직전에는 사이트에 미리 한 번 접속**해 두세요.
 
-## 4. 내 PC에서 시험하기 (선택)
+## 4. 자동 시험과 운영 점검
+
+**자동 시험 (GitHub Actions)**: `medinavi` 폴더를 고친 PR을 올리면 `.github/workflows/medinavi-tests.yml`이 자동으로 실행됩니다. PR 화면에 빨간 X가 뜨면 합치기 전에 원인을 확인하세요.
+- 실제 패키지로 서버가 켜지는지 (오타로 인한 시작 실패 방지)
+- 서버 단위 시험: 실시간 정보 정리·저장, 증상 분류 검증, 길찾기 저장, 호출 제한, 주소 검색, 규칙표 이름 검사
+- 화면 시나리오 시험: 조건 검색, 실시간 표시, 증상 추천, 출발지 주소, 실시간 실패 시 동작
+
+내 PC에서 직접 돌리려면 `medinavi` 폴더에서 실행합니다 (외부 접속 없이 동작).
+
+```powershell
+python -m unittest discover -s tests -p "test_*.py"
+node tests/js/frontend.test.js
+```
+
+**호출 제한**: 누구나 부를 수 있는 API는 IP별 1분 호출 수를 제한합니다 (길찾기 120, 주소 검색 20, 증상 분류 10, 실시간 30). 같은 출발지(약 10m)에서 같은 병원으로 가는 길찾기는 5분 동안 저장값을 다시 씁니다.
+
+**정기 점검 (한 달에 한 번 권장)**
+1. `python tools/refresh_hospitals.py`로 병원 목록 변경 확인 → 필요하면 `--write`로 반영 → 새 기관이 있으면 `python tools/fetch_departments.py --write`
+2. 바뀐 `data/hospitals.json`을 PR로 올립니다.
+
+**AI 증상 분류 채점**: `python tools/eval_symptom.py` (배포 사이트 기준, 약 6분). 분류마다 정확도와 틀린 문장을 보여주고 결과를 `data/`에 저장합니다.
+
+## 4-1. 내 PC에서 서버 띄우기 (선택)
 
 `medinavi` 폴더를 VS Code로 열고 터미널에서 실행합니다.
 
