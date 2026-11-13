@@ -45,7 +45,8 @@ def same_value(field, old, new):
             return abs(float(old) - float(new)) < 1e-6
         except (TypeError, ValueError):
             pass
-    return (old or "").strip() == (new or "").strip()
+    # 주소 안의 공백 개수 차이는 같은 값으로 본다.
+    return " ".join((old or "").split()) == " ".join((new or "").split())
 
 
 def main():
