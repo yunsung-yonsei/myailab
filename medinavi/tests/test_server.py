@@ -179,6 +179,16 @@ class SymptomParse(unittest.TestCase):
         result = self.parse({"category_id": "heart", "symptom_keywords": [], "is_child": None, "max_minutes": 0}, "어지러움")
         self.assertEqual((result.category_id, result.max_minutes), ("unclear", None))
 
+    def test_refine_keeps_previous(self):
+        previous = self.app.PreviousCondition(query="교통사고로 다리를 다쳤어요", category_id="trauma", is_child=None, max_minutes=60)
+        self.openai.output = {"category_id": "trauma", "symptom_keywords": ["교통사고", "7살", "없는말"], "is_child": True, "max_minutes": None}
+        result = run(self.app.app.routes["/api/symptom/parse"](FakeRequest(), self.app.SymptomRequest(query="7살 아이예요", previous=previous)))
+        self.assertEqual((result.category_id, result.is_child, result.max_minutes), ("trauma", True, 60), "언급 안 된 시간은 유지해야 해요")
+        self.assertEqual(result.symptom_keywords, ["교통사고", "7살"])
+        self.assertIn("직전 분류: trauma", self.openai.last["input"])
+        self.assertIn("바뀐 내용: 7살 아이예요", self.openai.last["input"])
+        self.assertIn("언급되지 않은 항목은 직전 조건 값을", self.openai.last["instructions"])
+
     def test_no_key(self):
         app, _, _ = load_app()
         with self.assertRaises(app.HTTPException) as context:

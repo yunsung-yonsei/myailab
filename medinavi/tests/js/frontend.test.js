@@ -68,6 +68,7 @@ function createPage({symptom = null, realtimeFails = false, geocode = null} = {}
   const fits = [];
   const routeRequests = [];
   const geoRequests = [];
+  const symptomRequests = [];
 
   function element(id) {
     return {
@@ -131,7 +132,12 @@ function createPage({symptom = null, realtimeFails = false, geocode = null} = {}
     if (url === "/api/hospitals") return ok(hospitals);
     if (url === "/api/rules") return ok(rules);
     if (url === "/api/realtime") return realtimeFails ? {ok: false, status: 503, json: async () => ({detail: "실시간 병상 정보가 아직 설정되지 않았어요."})} : ok(realtime);
-    if (url === "/api/symptom/parse") return symptom ? ok(symptom) : {ok: false, status: 503, json: async () => ({detail: "자연어 검색이 아직 설정되지 않았어요."})};
+    if (url === "/api/symptom/parse") {
+      const sent = JSON.parse(options.body);
+      symptomRequests.push(sent);
+      const answer = typeof symptom === "function" ? symptom(sent) : symptom;
+      return answer ? ok(answer) : {ok: false, status: 503, json: async () => ({detail: "자연어 검색이 아직 설정되지 않았어요."})};
+    }
     if (url.startsWith("/api/geocode")) return ok({results: geocode || []});
     if (url.startsWith("/api/route")) {
       const params = new URLSearchParams(url.split("?")[1]);
@@ -151,7 +157,7 @@ function createPage({symptom = null, realtimeFails = false, geocode = null} = {}
   context.window = context;
   vm.createContext(context);
   for (const file of scripts) vm.runInContext(read(file), context, {filename: file});
-  return {els, context, markers, fits, routeRequests, geoRequests, hospitals, realtime, badges, buttonsIn, naver,
+  return {els, context, markers, fits, routeRequests, geoRequests, symptomRequests, hospitals, realtime, badges, buttonsIn, naver,
     run: code => vm.runInContext(code, context)};
 }
 
@@ -283,6 +289,58 @@ test("증상 추천: AI 실패 시 직접 분류, 확인 필요가 많으면 접
   els["hospital-type"].value = "지역응급의료기관"; els["max-minutes"].value = "300";
   await els["hospital-search"].fire("submit");
   assert.strictEqual(els["recommend-area"].hidden, true);
+});
+
+test("조건 바꾸기: 직전 조건을 함께 보내고, 바뀐 항목을 알려주고, 다시 찾기", async () => {
+  const adult = {category_id: "cardiac", symptom_keywords: ["가슴 통증"], is_child: false, max_minutes: 300};
+  const page = createPage({symptom: sent => sent.previous ? {...adult, symptom_keywords: [], is_child: true} : adult});
+  await start(page);
+  const {els} = page;
+  assert.ok(els["refine-form"].hidden, "검색 전에는 조건 바꾸기를 숨겨요");
+  els["symptom-query"].value = "가슴 통증";
+  await els["symptom-search"].listeners.submit[0]({preventDefault() {}});
+  els["rec-type"].value = "지역응급의료기관";
+  for (const listener of els["symptom-go"].listeners.click) await listener();
+  await tick();
+  assert.ok(!els["refine-form"].hidden);
+  assert.strictEqual(els["refine-current"].textContent, "현재 조건: 흉통 · 심혈관 의심 · 소아 아님 · 300분 이내 · 지역응급의료기관");
+
+  els["refine-query"].value = "7살 아이예요";
+  await els["refine-form"].listeners.submit[0]({preventDefault() {}});
+  const sent = page.symptomRequests.at(-1);
+  assert.deepStrictEqual(sent, {query: "7살 아이예요", previous: {query: "가슴 통증", category_id: "cardiac", is_child: false, max_minutes: 300}});
+  assert.ok(els["symptom-confirm"].open, "바뀐 조건은 확인창에서 다시 확인해요");
+  assert.strictEqual(els["symptom-note"].textContent, "바뀐 항목: 소아 아니오 → 예");
+  assert.strictEqual(els["rec-type"].value, "지역응급의료기관", "언급 안 한 유형은 그대로");
+  assert.strictEqual(els["refine-query"].value, "");
+  for (const listener of els["symptom-go"].listeners.click) await listener();
+  await tick();
+  assert.match(els["refine-current"].textContent, /· 소아 ·/);
+
+  // 다음 조건 바꾸기 때는 문장이 이어 붙어 전체 맥락이 간다.
+  els["refine-query"].value = "30분 안으로";
+  await els["refine-form"].listeners.submit[0]({preventDefault() {}});
+  assert.strictEqual(page.symptomRequests.at(-1).previous.query, "가슴 통증 / 7살 아이예요");
+});
+
+test("병원 상세: 추가 확인 사항에 전화 확인, 검색 조건 확인 필요, 공지, 이동시간 한계", async () => {
+  const page = createPage(); await start(page);
+  const {els} = page;
+  els["hospital-type"].value = "지역응급의료기관"; els.illness.value = "[재관류중재술] 심근경색"; els["max-minutes"].value = "300";
+  await els["hospital-search"].fire("submit");
+  const items = page.hospitals.items;
+  // 심근경색 '확인 필요'인 지역응급의료기관 하나를 고른다 (index % 3 === 2, 실시간 있음)
+  const unsure = items.find((item, index) => index % 3 === 2 && index % 6 !== 5 && index !== 2 && item.dutyEmclsName === "지역응급의료기관");
+  page.run(`showHospitalDetail(${JSON.stringify(unsure)}, window.medinaviData)`);
+  const texts = els["detail-checks-list"].children.map(item => item.textContent);
+  assert.match(texts[0], /출발 전에 응급실\(.+\)에 전화로 확인/);
+  assert.ok(texts.some(text => /검색 조건 '\[재관류중재술\] 심근경색': .*확인 필요/.test(text)), texts.join("\n"));
+  assert.ok(texts.some(text => /병원이 입력한 값이고 갱신 시각이 제공되지 않아요/.test(text)));
+  assert.match(texts.at(-1), /일반 자동차 기준 참고값/);
+
+  const withNotice = items[0];
+  page.run(`showHospitalDetail(${JSON.stringify(withNotice)}, window.medinaviData)`);
+  assert.ok(els["detail-checks-list"].children.some(item => /공지가 1건/.test(item.textContent)));
 });
 
 test("출발지 주소: 고른 주소로 길찾기, 버튼 이름 변경, 늦게 온 위치 응답 무시", async () => {
