@@ -1,0 +1,44 @@
+# 메디네비 자동 시험: medinavi 폴더가 바뀌는 PR과 main 반영 때마다 실행한다.
+# 실패하면 PR에 빨간 X가 표시되니, 합치기 전에 확인해 주세요.
+name: medinavi tests
+
+on:
+  pull_request:
+    paths: ["medinavi/**", ".github/workflows/medinavi-tests.yml"]
+  push:
+    branches: [main]
+    paths: ["medinavi/**", ".github/workflows/medinavi-tests.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: medinavi
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install server packages
+        run: pip install -r requirements.txt
+
+      # Render와 같은 실제 패키지로 서버가 켜지는지 확인한다 (예: 오타로 인한 시작 실패).
+      - name: Server starts
+        env:
+          NAVER_MAPS_CLIENT_ID: test
+          NAVER_MAPS_CLIENT_SECRET: test
+        run: python -c "import app; print('server import ok')"
+
+      - name: Server unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
+
+      - name: Frontend syntax
+        run: for file in frontend/*.js; do node --check "$file"; done
+
+      - name: Frontend scenarios
+        run: node tests/js/frontend.test.js
