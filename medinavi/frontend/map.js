@@ -422,6 +422,9 @@ function setupHospitalSearch(data){
       // 응급실 실시간 가용병상 한 줄 요약과 혼잡도 색 띠
       const realtimeText = window.medinaviRealtime?.summary(hospital.hpid);
       if (realtimeText) button.textContent += "\n" + realtimeText;
+      // 병원이 직접 올린 공지(진료 불가·미운영 등)가 있으면 한 줄로 알린다.
+      const noticeText = window.medinaviRealtime?.noticeText?.(hospital.hpid);
+      if (noticeText) button.textContent += "\n" + noticeText;
       const congestion = window.medinaviRealtime?.level(hospital.hpid);
       if (congestion) button.dataset.congestion = congestion;
       button.onclick = () => showHospitalDetail(hospital, data, route);
