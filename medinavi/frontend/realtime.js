@@ -165,7 +165,7 @@
     meta.classList.toggle("stale", stale);
     addList(body, "가용 병상", info.beds.map(bed => bed.label + " " + bedText(bed.available, bed.total)));
     addStatusGroups(body, "시설·장비", info.equipment);
-    addStatusGroups(body, "중증질환 수용 가능 (병원 입력 기준)",
+    addStatusGroups(body, "중증질환 수용 가능 (병원 입력 기준 · 갱신 시각 미제공)",
       info.illness.map(item => ({label: item.label + (item.note ? " (" + item.note + ")" : ""), status: item.status})));
     if (data.errors?.length) {
       const warning = document.createElement("p");

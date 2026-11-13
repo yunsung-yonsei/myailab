@@ -53,9 +53,9 @@
     const required = (selected.required || []).map(item => item.name);
     const any = (selected.required_any || []).map(item => item.name);
     const parts = [];
-    if (required.length) parts.push("모두 가능해야 추천: " + required.join(", "));
-    if (any.length) parts.push("하나 이상 가능하면 추천: " + any.join(" 또는 "));
-    requiredText.textContent = parts.length ? parts.join(" / ") : (selected.note || "필수 역량 없이 이동시간순으로 보여줘요.");
+    if (required.length) parts.push("모두 가능해야 일치: " + required.join(", "));
+    if (any.length) parts.push("하나 이상 가능하면 일치: " + any.join(" 또는 "));
+    requiredText.textContent = parts.length ? parts.join(" / ") : (selected.note || "필수 조건 없이 이동시간순으로 보여줘요.");
   }
 
   function clearArea() {
@@ -68,56 +68,16 @@
     area.hidden = true;
   }
 
-  // ---- 역량 판정 -------------------------------------------------------
-  function resolve(hospital, requirement) {
-    const realtime = window.medinaviRealtime;
-    const loaded = Boolean(realtime?.isLoaded());
-    const missing = loaded ? "실시간 정보 없음" : "실시간 정보를 불러오지 못함";
-    if (requirement.type === "illness") {
-      const info = loaded ? realtime.illnessStatus(hospital.hpid, requirement.name) : null;
-      if (!info) return {status: "확인 필요", detail: missing};
-      return {status: info.status, detail: info.status === "확인 필요" ? "병원 정보미제공" : info.note || ""};
-    }
-    if (requirement.type === "equipment") {
-      const value = loaded ? realtime.equipmentStatus(hospital.hpid, requirement.name) : null;
-      return value ? {status: value, detail: ""} : {status: "확인 필요", detail: missing};
-    }
-    if (requirement.type === "bed") {
-      const count = loaded ? realtime.bedAvailable(hospital.hpid, requirement.name) : null;
-      if (count == null) return {status: "확인 필요", detail: "병상 정보 없음"};
-      return count > 0 ? {status: "가능", detail: "가용 " + count} : {status: "불가", detail: "가용 " + count + " (포화)"};
-    }
-    if (requirement.type === "department") {
-      const departments = hospital.departments || [];
-      if (!departments.length) return {status: "확인 필요", detail: "진료과목 자료 없음"};
-      return departments.includes(requirement.name) ? {status: "가능", detail: "등록"} : {status: "불가", detail: "미등록"};
-    }
-    return {status: "확인 필요", detail: "알 수 없는 조건"};
-  }
-
+  // ---- 역량 판정 (공통 판정 judgement.js 사용) ----------------------------
   function evaluate(hospital, selected, isChild) {
-    const check = (list, kind) => (list || []).map(item => ({...item, kind, ...resolve(hospital, item)}));
-    const required = check(selected.required, "required");
-    const any = check(selected.required_any, "any");
+    // 소아일 때 규칙표의 child_required를 필수 조건에 더한다 (자문 후 채울 자리).
+    const required = [...(selected.required || []), ...(isChild ? rules.child_required || [] : [])];
+    const any = selected.required_any || [];
     // 소아 공통 참고 항목이 분류의 필수·참고 항목과 겹치면 한 번만 보여준다.
     const same = (a, b) => a.type === b.type && a.name === b.name;
-    const essentials = [...(selected.required || []), ...(selected.required_any || [])];
-    const referenceItems = [...(selected.reference || []), ...(isChild ? rules.child_reference || [] : [])]
-      .filter((item, index, list) => list.findIndex(other => same(other, item)) === index && !essentials.some(other => same(other, item)));
-    const reference = check(referenceItems, "reference");
-    let verdict = "추천";
-    if (required.some(item => item.status === "불가") || (any.length && any.every(item => item.status === "불가"))) {
-      verdict = "제외";
-    } else if (!required.every(item => item.status === "가능") || (any.length && !any.some(item => item.status === "가능"))) {
-      verdict = "확인 필요";
-    }
-    return {verdict, checks: [...required, ...any, ...reference]};
-  }
-
-  function checkText(item) {
-    const word = item.type === "department" ? (item.status === "가능" ? "등록" : item.status === "불가" ? "미등록" : "확인 필요")
-      : item.status;
-    return item.name + " " + word + (item.detail && !["등록", "미등록"].includes(item.detail) ? "(" + item.detail + ")" : "");
+    const reference = [...(selected.reference || []), ...(isChild ? rules.child_reference || [] : [])]
+      .filter((item, index, list) => list.findIndex(other => same(other, item)) === index && ![...required, ...any].some(other => same(other, item)));
+    return window.medinaviJudge.evaluate(hospital, {required, any, reference});
   }
 
   // ---- 추천 실행 --------------------------------------------------------
@@ -134,28 +94,22 @@
     const controller = new AbortController();
     request = controller;
     const selected = category(selectedId);
-    areaStatus.textContent = "실시간 역량 정보를 확인하고 있어요.";
+    areaStatus.textContent = "실시간 정보를 확인하고 있어요.";
     await window.medinaviRealtime?.refresh();
     if (controller.signal.aborted) return;
 
     const evaluated = data.items
       .filter(hospital => !type || hospital.dutyEmclsName === type)
       .map(hospital => ({hospital, ...evaluate(hospital, selected, isChild)}));
-    const excluded = evaluated.filter(entry => entry.verdict === "제외").length;
-    const toRoute = evaluated.filter(entry => entry.verdict !== "제외");
+    const excluded = evaluated.filter(entry => entry.verdict === "불일치").length;
 
     areaStatus.textContent = "병원별 예상 이동시간을 조회하고 있어요.";
-    const routed = [];
-    for (let index = 0; index < toRoute.length; index += 4) {
-      const batch = toRoute.slice(index, index + 4);
-      const lookedUp = await Promise.all(batch.map(entry => window.medinaviLookupRoute(entry.hospital, origin, controller.signal)));
-      if (controller.signal.aborted) return;
-      lookedUp.forEach((result, offset) => routed.push({...batch[offset], route: result.route}));
-    }
+    const routed = await window.medinaviJudge.lookupRoutes(evaluated.filter(entry => entry.verdict !== "불일치"), origin, controller.signal);
+    if (!routed) return;
     const noRoute = routed.filter(entry => !entry.route).length;
     const within = routed.filter(entry => entry.route && entry.route.duration_ms <= maxMinutes * 60000)
       .sort((a, b) => a.route.duration_ms - b.route.duration_ms);
-    const recommended = within.filter(entry => entry.verdict === "추천").slice(0, 5);
+    const recommended = within.filter(entry => entry.verdict === "일치").slice(0, 5);
     const unknown = within.filter(entry => entry.verdict === "확인 필요");
 
     recommended.forEach((entry, index) => {
@@ -168,8 +122,9 @@
       const distance = (route.distance_m / 1000).toFixed(1);
       const required = checks.filter(check => check.kind !== "reference");
       const reference = checks.filter(check => check.kind === "reference").slice(0, 4);
-      let text = (index + 1) + ". " + hospital.dutyName + " · 약 " + minutes + "분 · " + distance + "km";
-      if (required.length) text += "\n필수: " + required.map(checkText).join(" · ");
+      const checkText = window.medinaviJudge.checkText;
+      let text = (index + 1) + ". " + hospital.dutyName + " (" + (hospital.dutyEmclsName || "구분 확인 필요") + ") · 약 " + minutes + "분 · " + distance + "km";
+      if (required.length) text += "\n조건: " + required.map(checkText).join(" · ");
       if (reference.length) text += "\n참고: " + reference.map(checkText).join(" · ");
       const realtimeText = window.medinaviRealtime?.summary(hospital.hpid);
       if (realtimeText) text += "\n" + realtimeText;
@@ -182,25 +137,27 @@
     });
     for (const {hospital, route, checks} of unknown) {
       const item = document.createElement("li");
-      const reasons = checks.filter(check => check.kind !== "reference" && check.status !== "가능").map(checkText);
+      const reasons = checks.filter(check => check.kind !== "reference" && check.status !== "가능").map(window.medinaviJudge.checkText);
       item.textContent = hospital.dutyName + " · 약 " + Math.ceil(route.duration_ms / 60000) + "분 — " + reasons.join(", ");
       unknownList.append(item);
     }
     unknownBox.hidden = unknown.length === 0;
     // 5곳이 넘으면 접어 두고 개수만 보여준다.
-    unknownSummary.textContent = "역량 확인 필요 (" + unknown.length + "곳)";
+    unknownSummary.textContent = "조건 확인 필요 (" + unknown.length + "곳)";
     unknownBox.open = unknown.length <= 5;
     window.hospitalRouteView?.showSearchResults(recommended);
 
     const summary = [
       selected.label,
-      "예상 " + maxMinutes + "분 이내 추천 " + recommended.length + "곳" + (within.filter(e => e.verdict === "추천").length > 5 ? " (상위 5곳 표시)" : ""),
-      unknown.length && "역량 확인 필요 " + unknown.length + "곳",
-      excluded && "필수 역량 불가 " + excluded + "곳 제외",
+      "예상 " + maxMinutes + "분 이내 조건 일치 " + recommended.length + "곳" + (within.filter(e => e.verdict === "일치").length > 5 ? " (상위 5곳 표시)" : ""),
+      unknown.length && "조건 확인 필요 " + unknown.length + "곳",
+      excluded && "조건 불일치 " + excluded + "곳 제외",
       noRoute && "이동시간 확인 불가 " + noRoute + "곳",
     ].filter(Boolean);
-    areaStatus.textContent = summary.join(" · ") + (recommended.length ? "" : ". 조건을 넓히거나 확인 필요 목록의 병원에 연락해 주세요.");
-    notice.textContent = (selected.note ? selected.note + " " : "") + rules.notice;
+    // 결과가 없으면 어디서 줄었는지 단계별로 알려준다.
+    const funnel = "후보 " + evaluated.length + "곳 → 조건 일치 " + routed.filter(e => e.verdict === "일치").length + "곳 → " + maxMinutes + "분 이내 0곳";
+    areaStatus.textContent = summary.join(" · ") + (recommended.length ? "" : ". [" + funnel + "] 조건을 넓히거나 확인 필요 목록의 병원에 연락해 주세요.");
+    notice.textContent = (selected.note ? selected.note + " " : "") + rules.notice + " 예상 시간은 일반 자동차 기준 참고값이에요.";
     request = null;
   }
 
