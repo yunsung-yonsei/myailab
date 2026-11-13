@@ -12,4 +12,5 @@ def Field(**kwargs):
 class BaseModel:
     def __init__(self, **values):
         for name in self.__annotations__:
-            setattr(self, name, values[name])
+            # 기본값이 있는 필드는 빠져도 된다.
+            setattr(self, name, values[name] if name in values else getattr(type(self), name))

@@ -74,5 +74,14 @@
     return routed;
   }
 
-  window.medinaviJudge = {VERDICT, resolve, evaluate, checkText, lookupRoutes};
+  // 마지막 검색(조건 검색 또는 증상 추천)의 병원별 조건 판정. 병원 상세 '추가 확인 사항'에서 쓴다.
+  let lastChecks = new Map();
+  function remember(evaluated) {
+    lastChecks = new Map(evaluated.map(entry => [entry.hospital.hpid, entry.checks || []]));
+  }
+  function checksFor(hpid) {
+    return lastChecks.get(hpid) || [];
+  }
+
+  window.medinaviJudge = {remember, checksFor, VERDICT, resolve, evaluate, checkText, lookupRoutes};
 })();

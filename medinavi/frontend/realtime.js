@@ -122,6 +122,23 @@
     return (date.getMonth() + 1) + "/" + date.getDate() + "(" + days[date.getDay()] + ") " + pad(date.getHours()) + ":" + pad(date.getMinutes()) + "까지";
   }
 
+  // 병원 상세 '추가 확인 사항'에 넣을 실시간 정보 관련 주의점
+  function checkItems(hpid) {
+    if (!data) return [error ? "실시간 병상 정보를 불러오지 못했어요." : "실시간 병상 정보를 아직 불러오지 않았어요."];
+    const items = [];
+    const info = data.hospitals?.[hpid];
+    if (!info?.has_beds) items.push("이 기관은 실시간 병상 정보를 제공하지 않아요.");
+    else {
+      const age = minutesAgo(info.updated_at);
+      if (age == null) items.push("실시간 병상 정보의 갱신 시각을 알 수 없어요.");
+      else if (age > STALE_MINUTES) items.push("실시간 병상 정보가 " + age + "분 전 값이라 지금과 다를 수 있어요.");
+    }
+    if (info?.has_illness) items.push("중증질환 수용 가능 여부는 병원이 입력한 값이고 갱신 시각이 제공되지 않아요.");
+    const count = notices(hpid).length;
+    if (count) items.push("병원이 올린 공지가 " + count + "건 있어요. 아래 '병원 공지'를 확인해 주세요.");
+    return items;
+  }
+
   function heading(text) {
     const element = document.createElement("h4");
     element.textContent = text;
@@ -215,7 +232,7 @@
     }
   }
 
-  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, equipmentStatus, bedAvailable, notices, noticeText, renderDetail};
+  window.medinaviRealtime = {refresh, summary, level, isLoaded, illnessStatus, equipmentStatus, bedAvailable, notices, noticeText, checkItems, renderDetail};
   refresh();
   // 화면을 보고 있는 동안에는 2분마다 새로 불러온다.
   setInterval(() => {

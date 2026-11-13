@@ -124,6 +124,7 @@ function showHospitalDetail(hospital, data, savedRoute = null) {
   }
   // 추가: 실시간 병상·중증질환 수용 가능 정보 (realtime.js)
   window.medinaviRealtime?.renderDetail(hospital);
+  renderDetailChecks(hospital);
   detail.hidden = false;
   if (savedRoute) {
     document.querySelector("#map").scrollIntoView({block: "start"});
@@ -132,6 +133,34 @@ function showHospitalDetail(hospital, data, savedRoute = null) {
     detail.scrollIntoView({block: "start"});
   }
   showHospitalRoute(hospital, savedRoute);
+}
+
+// 병원 상세의 '추가 확인 사항': 출발 전에 병원에 확인해야 할 점을 한곳에 모은다.
+function renderDetailChecks(hospital) {
+  const list = document.querySelector("#detail-checks-list");
+  if (!list) return;
+  const items = [];
+  const phone = String(hospital.dutyTel3 || "").trim();
+  items.push(phone
+    ? "실제 수용 가능 여부는 출발 전에 응급실(" + phone + ")에 전화로 확인해 주세요."
+    : "응급실 연락처가 없어요. 실제 수용 가능 여부를 병원 대표번호로 확인해 주세요.");
+  // 마지막 검색에서 '확인 필요'·'불일치'로 나온 조건
+  const judge = window.medinaviJudge;
+  for (const check of judge?.checksFor(hospital.hpid) || []) {
+    if (check.kind === "reference" || check.status === "가능") continue;
+    items.push("검색 조건 '" + check.name + "': " + judge.checkText(check));
+  }
+  if (!(hospital.departments || []).length || hospital.departments_status === "확인 필요") {
+    items.push("등록 진료과목 자료가 없어 진료과목 조건을 확인할 수 없어요.");
+  }
+  items.push(...(window.medinaviRealtime?.checkItems?.(hospital.hpid) || []));
+  items.push("예상 이동시간은 일반 자동차 기준 참고값이에요. 구급차 이동, 실시간 교통, 눈·비 같은 기상 상황은 반영되지 않아요.");
+  list.replaceChildren();
+  for (const text of items) {
+    const item = document.createElement("li");
+    item.textContent = text;
+    list.append(item);
+  }
 }
 
 function setupMyLocation(map) {
@@ -398,6 +427,7 @@ function setupHospitalSearch(data){
     const required = [department && {type: "department", name: department}, illness && {type: "illness", name: illness}].filter(Boolean);
     const typeMatched = data.items.filter(hospital => hospital.dutyEmclsName === typeSelect.value);
     const evaluated = typeMatched.map(hospital => ({hospital, ...judge.evaluate(hospital, {required})}));
+    judge.remember(evaluated);
     const mismatched = evaluated.filter(entry => entry.verdict === "불일치");
     status.textContent = "병원별 예상 이동시간을 조회하고 있어요.";
     const routed = await judge.lookupRoutes(evaluated.filter(entry => entry.verdict !== "불일치"), origin, controller.signal, lookupRoute);

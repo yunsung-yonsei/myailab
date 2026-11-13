@@ -21,8 +21,16 @@
   const unknownList = $("#recommend-unknown-list");
   const unknownSummary = $("#recommend-unknown-summary");
   const notice = $("#recommend-notice");
+  const refineForm = $("#refine-form");
+  const refineInput = $("#refine-query");
+  const refineButton = $("#refine-button");
+  const refineStatus = $("#refine-status");
+  const refineCurrent = $("#refine-current");
   let rules = null;
   let request = null;
+  // 조건 바꾸기: 직전 검색 조건과, 확인창에 올라간(아직 검색 전) 문장
+  let lastCondition = null;
+  let pendingQuery = "";
 
   async function loadRules() {
     if (rules) return rules;
@@ -66,6 +74,36 @@
     unknownBox.hidden = true;
     areaStatus.textContent = "";
     area.hidden = true;
+    refineForm.hidden = true;
+  }
+
+  // 확인창에 AI 분류 결과를 채운다. AI가 실패하면 parsed 없이 직전 값(또는 기본값)으로 연다.
+  function openConfirm(parsed, fallback = null) {
+    categorySelect.value = parsed?.category_id || fallback?.category_id || "unclear";
+    keywordsText.textContent = parsed?.symptom_keywords?.length
+      ? "AI가 참고한 표현: " + parsed.symptom_keywords.map(word => "'" + word + "'").join(", ")
+      : "AI가 참고한 표현 없음";
+    childBox.checked = parsed ? parsed.is_child === true : fallback?.is_child === true;
+    const minutes = parsed?.max_minutes || fallback?.max_minutes;
+    if (minutes) minutesInput.value = minutes;
+    if (fallback) typeSelect.value = fallback.type || "";
+    describeRequired();
+    dialog.showModal();
+  }
+
+  function conditionText(condition) {
+    return [category(condition.category_id).label, condition.is_child ? "소아" : "소아 아님",
+      condition.max_minutes + "분 이내", condition.type || "전체 유형"].join(" · ");
+  }
+
+  // 직전 조건과 확인창 값을 비교해 바뀐 항목을 알려준다.
+  function describeChanges(before) {
+    const after = {category_id: categorySelect.value, is_child: childBox.checked, max_minutes: Number(minutesInput.value)};
+    const changes = [];
+    if (after.category_id !== before.category_id) changes.push("증상 분류 " + category(before.category_id).label + " → " + category(after.category_id).label);
+    if (after.is_child !== Boolean(before.is_child)) changes.push("소아 " + (before.is_child ? "예" : "아니오") + " → " + (after.is_child ? "예" : "아니오"));
+    if (after.max_minutes !== before.max_minutes) changes.push("이동시간 " + before.max_minutes + "분 → " + after.max_minutes + "분");
+    return changes.length ? "바뀐 항목: " + changes.join(", ") : "바뀐 항목이 없어요. 직전 조건 그대로예요. 필요하면 아래에서 직접 고쳐 주세요.";
   }
 
   // ---- 역량 판정 (공통 판정 judgement.js 사용) ----------------------------
@@ -101,6 +139,7 @@
     const evaluated = data.items
       .filter(hospital => !type || hospital.dutyEmclsName === type)
       .map(hospital => ({hospital, ...evaluate(hospital, selected, isChild)}));
+    window.medinaviJudge.remember(evaluated);
     const excluded = evaluated.filter(entry => entry.verdict === "불일치").length;
 
     areaStatus.textContent = "병원별 예상 이동시간을 조회하고 있어요.";
@@ -161,6 +200,10 @@
     const funnel = "후보 " + evaluated.length + "곳 → 조건 일치 " + routed.filter(e => e.verdict === "일치").length + "곳 → " + maxMinutes + "분 이내 0곳";
     areaStatus.textContent = summary.join(" · ") + (recommended.length ? "" : ". [" + funnel + "] 조건을 넓히거나 확인 필요 목록의 병원에 연락해 주세요.");
     notice.textContent = (selected.note ? selected.note + " " : "") + rules.notice + " 예상 시간은 일반 자동차 기준 참고값이에요.";
+    if (lastCondition) {
+      refineCurrent.textContent = "현재 조건: " + conditionText(lastCondition);
+      refineForm.hidden = false;
+    }
     request = null;
   }
 
@@ -189,15 +232,9 @@
         // AI가 실패해도 사용자가 직접 분류를 골라 추천받을 수 있게 한다.
         note.textContent = (error.message || "AI 증상 분류에 실패했어요.") + " 증상 분류를 직접 골라 주세요.";
       }
-      categorySelect.value = parsed?.category_id || "unclear";
-      keywordsText.textContent = parsed?.symptom_keywords?.length
-        ? "AI가 참고한 표현: " + parsed.symptom_keywords.map(word => "'" + word + "'").join(", ")
-        : "AI가 참고한 표현 없음";
-      childBox.checked = parsed?.is_child === true;
-      if (parsed?.max_minutes) minutesInput.value = parsed.max_minutes;
-      describeRequired();
+      pendingQuery = query;
       status.textContent = "";
-      dialog.showModal();
+      openConfirm(parsed);
     } catch (error) {
       status.textContent = error.message || "증상 분류를 준비하지 못했어요.";
     } finally {
@@ -217,7 +254,37 @@
       return;
     }
     dialog.close();
+    lastCondition = {query: pendingQuery, category_id: categorySelect.value, is_child: childBox.checked, max_minutes: maxMinutes, type: typeSelect.value};
     recommend(categorySelect.value, childBox.checked, maxMinutes, typeSelect.value);
+  });
+
+  // 조건 바꾸기: 직전 조건은 두고, 새로 입력한 내용에 나온 항목만 AI가 바꾼다. 결과는 확인창에서 다시 확인한다.
+  refineForm.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const change = refineInput.value.trim();
+    if (!change || !lastCondition || refineButton.disabled) return;
+    refineButton.disabled = true;
+    refineStatus.textContent = "바뀐 조건을 확인하고 있어요.";
+    note.textContent = "";
+    const before = lastCondition;
+    let parsed = null;
+    try {
+      const previous = {query: before.query.slice(-300), category_id: before.category_id, is_child: before.is_child, max_minutes: before.max_minutes};
+      const response = await fetch("/api/symptom/parse", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({query: change, previous})});
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body) throw new Error(typeof body?.detail === "string" ? body.detail : "서버를 준비하고 있어요.");
+      parsed = body;
+    } catch (error) {
+      note.textContent = (error.message || "AI 조건 확인에 실패했어요.") + " 직전 조건을 띄웠으니 바뀐 내용을 직접 고쳐 주세요.";
+    } finally {
+      refineButton.disabled = false;
+      refineStatus.textContent = "";
+    }
+    // 다음 '조건 바꾸기' 때 AI가 전체 맥락을 알 수 있게 문장을 이어 붙인다.
+    pendingQuery = (before.query ? before.query + " / " : "") + change;
+    openConfirm(parsed, before);
+    if (parsed) note.textContent = describeChanges(before);
+    refineInput.value = "";
   });
 
   // 조건 검색을 하거나 출발지를 바꾸면 이전 추천을 정리한다.
